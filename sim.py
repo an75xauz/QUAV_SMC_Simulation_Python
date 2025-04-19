@@ -15,6 +15,7 @@ class QuadrotorSimulator:
         self.plant = QuadrotorPlant()
         self.controller = QuadrotorSMCController(self.plant)
         
+        
         # setup initial state
         initial_state = np.zeros(12)
         initial_state[:3] = initial_position
@@ -33,6 +34,7 @@ class QuadrotorSimulator:
         self.trajectory = [self.plant.get_position()]
         self.time_history = [self.t]
         self.attitude_history = [self.plant.get_attitude()]
+        self.control_inputs_history = []
         
         # Figure used
         self.fig = None
@@ -46,7 +48,8 @@ class QuadrotorSimulator:
 
         # Update control input and read control input
         control_input = self.controller.update(self.dt)
-        
+        self.control_inputs_history.append(control_input)
+
         # Update QUAV state
         self.plant.step(self.dt, control_input)
         
@@ -73,6 +76,7 @@ class QuadrotorSimulator:
         self.trajectory = np.array(self.trajectory)
         self.time_history = np.array(self.time_history)
         self.attitude_history = np.array(self.attitude_history)
+        self.control_inputs_history = np.array(self.control_inputs_history)
         
     def setup_animation(self):
         self.fig = plt.figure(figsize=(13, 6))
@@ -102,10 +106,10 @@ class QuadrotorSimulator:
         self.ax_position.set_ylabel('Position (m)')
         self.ax_position.set_title('Position')
         # Error
-        self.ax_error = self.fig.add_subplot(gs[2,1])
-        self.ax_error.set_xlabel('Time (s)')
-        self.ax_error.set_ylabel('Error (m)')
-        self.ax_error.set_title('Position Error')
+        self.ax_control = self.fig.add_subplot(gs[2,1])
+        self.ax_control.set_xlabel('Time (s)')
+        self.ax_control.set_ylabel('Control Inputs')
+        self.ax_control.set_title('Control Inputs')
         
         # Set up limitation of the figure
         target_pos = self.controller.target_position
@@ -132,8 +136,11 @@ class QuadrotorSimulator:
         self.ax_position.legend()
 
 
-        self.error_plot, = self.ax_error.plot([], [], label='Error')
-        self.ax_error.legend()
+        self.control_tau_x_plot, = self.ax_control.plot([], [], 'b-', label='tau_x')
+        self.control_tau_y_plot, = self.ax_control.plot([], [], 'y-', label='tau_y')
+        self.control_tau_z_plot, = self.ax_control.plot([], [], 'm-', label='tau_z')
+        self.control_fz_plot, = self.ax_control.plot([], [], 'c:',label='Fz')
+        self.ax_control.legend()
         
         return self.fig
         
@@ -186,19 +193,21 @@ class QuadrotorSimulator:
         self.y_plot.set_data(self.time_history[:t_idx+1], self.trajectory[:t_idx+1, 1])
         self.z_plot.set_data(self.time_history[:t_idx+1], self.trajectory[:t_idx+1, 2])
 
-        # error figure
-        error = np.linalg.norm(self.trajectory[:t_idx+1] - self.controller.target_position, axis=1)
-        self.error_plot.set_data(self.time_history[:t_idx+1], error)
-
-            
+        # control input figure
+        if t_idx < len(self.control_inputs_history):
+            self.control_tau_x_plot.set_data(self.time_history[:t_idx+1], self.control_inputs_history[:t_idx+1, 0])
+            self.control_tau_y_plot.set_data(self.time_history[:t_idx+1], self.control_inputs_history[:t_idx+1, 1])
+            self.control_tau_z_plot.set_data(self.time_history[:t_idx+1], self.control_inputs_history[:t_idx+1, 2])
+            self.control_fz_plot.set_data(self.time_history[:t_idx+1], self.control_inputs_history[:t_idx+1, 3])
+              
         #set up the range of the figure
         if t_idx > 0:
             self.ax_attitude.relim()
             self.ax_attitude.autoscale_view()
             self.ax_position.relim()
             self.ax_position.autoscale_view()
-            self.ax_error.relim()
-            self.ax_error.autoscale_view()
+            self.ax_control.relim()
+            self.ax_control.autoscale_view()
         
         return self.quadrotor_plot + [self.trajectory_plot]
         
@@ -247,12 +256,15 @@ class QuadrotorSimulator:
         ax3.set_ylabel('Degrees (rad)')
         ax3.set_title('Attitude Change')
         ax3.legend()
-        # error
+        # control input
         ax4 = fig.add_subplot(224)
-        ax4.plot(self.time_history, self.error_history, 'r-', label='Error')
+        ax4.plot(self.time_history[:-1], self.control_inputs_history[:, 0], 'y-', label='τ_x')
+        ax4.plot(self.time_history[:-1], self.control_inputs_history[:, 1], 'm-', label='τ_y')
+        ax4.plot(self.time_history[:-1], self.control_inputs_history[:, 2], 'k-', label='τ_z')
+        ax4.plot(self.time_history[:-1], self.control_inputs_history[:, 3], 'b-', label='Fz')
         ax4.set_xlabel('Time (s)')
-        ax4.set_ylabel('Error (m)')
-        ax4.set_title('Position Error')
+        ax4.set_ylabel('Control Inputs')
+        ax4.set_title('Control Inputs')
         ax4.legend()
 
         plt.tight_layout()
@@ -265,7 +277,7 @@ def main():
     parser = argparse.ArgumentParser(description='Control simulation')
     parser.add_argument('--initial', type=float, nargs=3, default=[0, 0, 0],
                         help='Initial Position [x y z] (Default: [0 0 0])')
-    parser.add_argument('--target', type=float, nargs=3, default=[0, 1, 0],
+    parser.add_argument('--target', type=float, nargs=3, default=[10, 10, 0],
                         help='Target Position [x y z] (Default: [1 1 1])')
     parser.add_argument('--time', type=float, default=10,
                         help='Simulation times (s) (Default: 10.0)')
