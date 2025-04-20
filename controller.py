@@ -3,26 +3,24 @@ import numpy as np
 class QuadrotorSMCController:
     def __init__(self, plant):
         self.plant = plant
-        
-        # 物理參數
         self.m = plant.m
         self.g = plant.g
         self.l = plant.l
         self.Ixx = plant.Ix
         self.Iyy = plant.Iy
         self.Izz = plant.Iz
-
+        # Parameters setting
         # 高度控制參數 height
-        self.lambda_alt = 2.8    # 高度滑動面係數 2.8
-        self.eta_alt = 20.0      # 高度切換增益 20
+        self.lambda_alt = 2.8    # z  slope = 2.8
+        self.eta_alt = 20.0      # z gain 20
         
         # 姿態控制參數 attitude
-        self.lambda_att = 30.0   # 姿態滑動面係數 30
-        self.eta_att = 9.0       # 姿態切換增益 9
+        self.lambda_att = 30.0   # attitude slope 30
+        self.eta_att = 9.0       # attitude gain 9
         
         # 位置控制參數 position
-        self.lambda_pos = 0.5  # 位置滑動面係數 0.25
-        self.eta_pos = 0.5      # 位置切換增益 0.05
+        self.lambda_pos = 0.5  # pos slope 0.25
+        self.eta_pos = 0.5      # pose gain 0.05
         
         # 平滑因子 smaller smoothly
         self.k_smooth = 0.5     # tanh 平滑因子 50.0
@@ -31,16 +29,11 @@ class QuadrotorSMCController:
         # angel limitation(rad)
         self.max_angle = 30 * np.pi/180
         
-        # 目標設定
         self.target_position = np.zeros(3)
         self.target_attitude = np.zeros(3)
         
-        # 內部狀態存儲
         self.prev_error_pos = np.zeros(3)
         self.prev_error_att = np.zeros(3)
-        
-        # 調試信息
-        # self.debug = {}
         
     def reset(self):
         self.prev_error_pos = np.zeros(3)
@@ -53,7 +46,7 @@ class QuadrotorSMCController:
         self.target_attitude = np.array(attitude)
         
     def update(self, dt):
-        # 獲取當前狀態
+        # current state
         state = self.plant.get_state()
         position = state[:3]               # x, y, z
         velocity = state[3:6]              # vx, vy, vz
@@ -77,12 +70,11 @@ class QuadrotorSMCController:
         if abs(denom) < 1e-6:
             denom = np.sign(denom) * 1e-6
             
-        # ---------- 高度控制 (對應 MATLAB 中的 Altitude SMC) ----------
         z_d = self.target_position[2]
         e_z = z_d - z
         e_z_dot = 0 - vz  # 假設目標高度不變，其導數為0
         
-        # 高度滑動面
+        # z 
         s_alt = e_z_dot + self.lambda_alt * e_z
         
         # 等效控制項
@@ -95,14 +87,13 @@ class QuadrotorSMCController:
         U1 = self.m * (U1_eq + U1_sw) / denom
         U1 = max(U1, 0.1)  # 確保推力為正且非零，避免除以零的錯誤
         
-        # ---------- 位置控制 (對應 MATLAB 中的 Position SMC) ----------
         # 保護因子，防止除以非常小的值
         safe_U1 = max(U1, 0.1)
         
         # X 方向控制 - 對應 theta 俯仰角
         x_d = self.target_position[0]
         e_x = x_d - x
-        e_x_dot = 0 - vx  # 假設目標位置不變，其導數為0
+        e_x_dot = 0 - vx  
         
         # X 方向滑動面
         s_x = e_x_dot + self.lambda_pos * e_x
@@ -110,16 +101,14 @@ class QuadrotorSMCController:
         # 等效控制項和切換控制項
         # 注意：確保與plant.py中的動力學方程一致
         # ax = -F_total * s_theta / self.m，所以我們需要負的Ux產生正的theta，從而產生正的ax
-        Ux_eq = -(self.m/safe_U1) * self.lambda_pos * (-vx)  # MATLAB原始公式
+        Ux_eq = -(self.m/safe_U1) * self.lambda_pos * (-vx)  
         Ux_sw = self.eta_pos * np.tanh(self.k_smooth_pos * s_x)
         
         # 虛擬控制輸入
         Ux = Ux_eq + Ux_sw
         
-        # 限制Ux在合理範圍內，防止arcsin出錯
+        # prevent arcsin has error trace back
         Ux = np.clip(Ux, -0.99, 0.99)
-        
-        # 期望俯仰角 - 與MATLAB一致（包括負號）
         theta_d = -np.arcsin(Ux)
         
         # Y 方向控制 - 對應 phi 滾轉角
@@ -136,71 +125,47 @@ class QuadrotorSMCController:
         # 等效控制項和切換控制項
         # 注意：確保與plant.py中的動力學方程一致
         # ay = F_total * c_theta * s_phi / self.m，所以我們需要正的Uy產生正的phi，從而產生正的ay
-        Uy_eq = (self.m/safe_U1) * self.lambda_pos * (-vy) / safe_cos_theta  # MATLAB原始公式
+        Uy_eq = (self.m/safe_U1) * self.lambda_pos * (-vy) / safe_cos_theta 
         Uy_sw = self.eta_pos * np.tanh(self.k_smooth_pos * s_y)
         
         # 虛擬控制輸入
         Uy = Uy_eq + Uy_sw
         
-        # 限制Uy在合理範圍內，防止arcsin出錯
+        # prevent arcsin has error trace back
         Uy = np.clip(Uy, -0.99, 0.99)
-        
-        # 期望滾轉角 - 與MATLAB一致
         phi_d = np.arcsin(Uy)
         
         # 限制期望角度在安全範圍內
+        # prevent too large angle
         phi_d = max(min(phi_d, self.max_angle), -self.max_angle)
         theta_d = max(min(theta_d, self.max_angle), -self.max_angle)
         
         # 期望偏航角
         psi_d = self.target_attitude[2]
         
-        # 保存調試信息
-        # self.debug = {
-        #     'e_x': e_x, 'e_y': e_y, 'e_z': e_z,
-        #     'Ux': Ux, 'Uy': Uy, 'theta_d': theta_d, 'phi_d': phi_d,
-        #     'current_phi': phi, 'current_theta': theta
-        # }
-        
-        # ---------- 姿態控制 (對應 MATLAB 中的 Attitude SMC) ----------
+      
         # 滾轉角控制
         e_phi = phi_d - phi
         s_phi = p + self.lambda_att * e_phi
         
-        # 等效控制項
         U2_eq = -((self.Iyy - self.Izz) * q * r + self.Ixx * self.lambda_att * p)
-        
-        # 切換控制項
         U2_sw = self.Ixx * self.eta_att * np.tanh(self.k_smooth * s_phi)
-        
-        # 總力矩
         U2 = U2_eq + U2_sw
         
         # 俯仰角控制
         e_theta = theta_d - theta
         s_theta = q + self.lambda_att * e_theta
         
-        # 等效控制項
         U3_eq = -((self.Izz - self.Ixx) * p * r + self.Iyy * self.lambda_att * q)
-        
-        # 切換控制項
         U3_sw = self.Iyy * self.eta_att * np.tanh(self.k_smooth * s_theta)
-        
-        # 總力矩
         U3 = U3_eq + U3_sw
         
         # 偏航角控制
         e_psi = psi_d - psi
         s_psi = r + self.lambda_att * e_psi
         
-        # 等效控制項
         U4_eq = -((self.Ixx - self.Iyy) * p * q + self.Izz * self.lambda_att * r)
-        
-        # 切換控制項
         U4_sw = self.Izz * self.eta_att * np.tanh(self.k_smooth * s_psi)
-        
-        # 總力矩
-        # Total torqe
         U4 = U4_eq + U4_sw
         
         # 確保控制輸入不包含 NaN 或 Inf
@@ -211,6 +176,7 @@ class QuadrotorSMCController:
         # 更新內部狀態
         self.prev_error_pos = np.array([e_x, e_y, e_z])
         self.prev_error_att = np.array([e_phi, e_theta, e_psi])
-        
-        # 返回控制輸入 [tau_x, tau_y, tau_z, Fz]
+        # control_out: 
+        # U1: F_total 
+        # U2 U3 U4: torqe
         return control_out

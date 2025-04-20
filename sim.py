@@ -15,7 +15,6 @@ class QuadrotorSimulator:
         self.plant = QuadrotorPlant()
         self.controller = QuadrotorSMCController(self.plant)
         
-        
         # setup initial state
         initial_state = np.zeros(12)
         initial_state[:3] = initial_position
@@ -94,7 +93,7 @@ class QuadrotorSimulator:
         self.ax_attitude.set_xlabel('Time (s)')
         self.ax_attitude.set_ylabel('Degree (rad)')
         self.ax_attitude.set_title('Attitude')
-        # test
+        # text
         self.ax_attitude_text_annotation = self.ax_attitude.text(0.1, 0.05 , '', # 初始文字為空
                           ha='center', va='center', # 置中對齊
                           fontsize=10, color='black',
