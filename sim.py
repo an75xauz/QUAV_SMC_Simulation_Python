@@ -277,7 +277,7 @@ def main():
     parser = argparse.ArgumentParser(description='Control simulation')
     parser.add_argument('--initial', type=float, nargs=3, default=[0, 0, 0],
                         help='Initial Position [x y z] (Default: [0 0 0])')
-    parser.add_argument('--target', type=float, nargs=3, default=[0, 1, 1],
+    parser.add_argument('--target', type=float, nargs=3, default=[1, 1, 2],
                         help='Target Position [x y z] (Default: [1 1 1])')
     parser.add_argument('--time', type=float, default=10,
                         help='Simulation times (s) (Default: 10.0)')
@@ -285,7 +285,7 @@ def main():
                         help='Times step (s) (Default: 0.01)')
     parser.add_argument('--plot', action='store_true',
                         help='Only Result')
-    parser.add_argument('--initial_attitude', type=float, nargs=3, default=[0, 0, 0],
+    parser.add_argument('--initial_attitude', type=float, nargs=3, default=[0, 0.1, 0.1],
                         help='Initial Attitude [roll pitch yaw] (Default: [0 0 0])')
     
     

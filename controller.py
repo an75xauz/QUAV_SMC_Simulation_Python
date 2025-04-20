@@ -1,10 +1,6 @@
 import numpy as np
 
 class QuadrotorSMCController:
-    """
-    基於滑模控制的四旋翼控制器
-    實現與MATLAB版本相同的控制方法
-    """
     def __init__(self, plant):
         self.plant = plant
         
@@ -15,25 +11,24 @@ class QuadrotorSMCController:
         self.Ixx = plant.Ix
         self.Iyy = plant.Iy
         self.Izz = plant.Iz
-        
-        # SMC 參數 (參考 MATLAB 代碼的參數設定)
-        # 高度控制參數
+
+        # 高度控制參數 height
         self.lambda_alt = 2.8    # 高度滑動面係數 2.8
         self.eta_alt = 20.0      # 高度切換增益 20
         
-        # 姿態控制參數
+        # 姿態控制參數 attitude
         self.lambda_att = 30.0   # 姿態滑動面係數 30
         self.eta_att = 9.0       # 姿態切換增益 9
         
-        # 位置控制參數
-        self.lambda_pos = 1.0  # 位置滑動面係數 0.25
-        self.eta_pos = 1      # 位置切換增益 0.05
+        # 位置控制參數 position
+        self.lambda_pos = 0.5  # 位置滑動面係數 0.25
+        self.eta_pos = 0.5      # 位置切換增益 0.05
         
-        # 平滑因子
+        # 平滑因子 smaller smoothly
         self.k_smooth = 0.5     # tanh 平滑因子 50.0
         self.k_smooth_pos = 0.5 # 位置控制平滑因子 50.0
         
-        # 角度限制 (30度，轉為弧度)
+        # angel limitation(rad)
         self.max_angle = 30 * np.pi/180
         
         # 目標設定
@@ -45,7 +40,7 @@ class QuadrotorSMCController:
         self.prev_error_att = np.zeros(3)
         
         # 調試信息
-        self.debug = {}
+        # self.debug = {}
         
     def reset(self):
         self.prev_error_pos = np.zeros(3)
@@ -161,11 +156,11 @@ class QuadrotorSMCController:
         psi_d = self.target_attitude[2]
         
         # 保存調試信息
-        self.debug = {
-            'e_x': e_x, 'e_y': e_y, 'e_z': e_z,
-            'Ux': Ux, 'Uy': Uy, 'theta_d': theta_d, 'phi_d': phi_d,
-            'current_phi': phi, 'current_theta': theta
-        }
+        # self.debug = {
+        #     'e_x': e_x, 'e_y': e_y, 'e_z': e_z,
+        #     'Ux': Ux, 'Uy': Uy, 'theta_d': theta_d, 'phi_d': phi_d,
+        #     'current_phi': phi, 'current_theta': theta
+        # }
         
         # ---------- 姿態控制 (對應 MATLAB 中的 Attitude SMC) ----------
         # 滾轉角控制
@@ -205,9 +200,11 @@ class QuadrotorSMCController:
         U4_sw = self.Izz * self.eta_att * np.tanh(self.k_smooth * s_psi)
         
         # 總力矩
+        # Total torqe
         U4 = U4_eq + U4_sw
         
         # 確保控制輸入不包含 NaN 或 Inf
+        # Make sure input will not contain NaN or Inf
         control_out = np.array([U2, U3, U4, U1])
         control_out = np.nan_to_num(control_out, nan=0.0, posinf=50.0, neginf=-50.0)
         
