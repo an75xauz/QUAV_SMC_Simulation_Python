@@ -36,7 +36,7 @@ class QuadrotorPlant:
         # p, q, r: angular velocity
         self.state = np.zeros(12)
         
-        # control input: [f1, f2, f3, f4]
+        # control input: [tau_x, tau_y, tau_z, F_total]
         self.control_input = np.zeros(4)
         
     def reset(self, initial_state=None):
@@ -47,28 +47,19 @@ class QuadrotorPlant:
         return self.state
         
     def set_control_input(self, control_input):
-        self.control_input = np.clip(control_input, 0, self.max_rpm)
+        self.control_input = control_input
         
     def dynamics(self, t, state, control_input):
         x, y, z, vx, vy, vz, phi, theta, psi, p, q, r = state
-        tau_x, tau_y, tau_z, Fz = control_input
+        tau_x, tau_y, tau_z, F_total = control_input
         
-        foce_matrix = np.array([
-                            [1,-1,-1,-1],
-                            [1,1,-1,1],
-                            [1,1,1,-1],
-                            [1,-1,1,1]
-        ])
-        # print(foce_matrix)
-        f1 ,f2 ,f3 ,f4= 0.25*np.dot(foce_matrix,np.array([Fz, tau_x/self.l, tau_y/self.l, tau_z*self.kf/self.km]))
-        F_total = f1+f2+f3+f4
-        # print(f'f1 = {f1},f2 = {f2},f3 = {f3},f4 = {f4}')
-        # Torque
-        # tau_phi = self.l * (f1 - f2 - f3 + f4) # Roll Torque from force differences
-        # tau_theta = self.l * (f1 + f2 - f3 - f4) 
-        # tau_psi = self.km / self.kf * (f1 - f2 + f3 - f4)
-        # attitude cos matrix
-        # Body frame to Inertial frame
+        # 確保力矩和推力的符號定義正確
+        # tau_x: 正值使機體繞X軸正向旋轉(增加roll角phi)
+        # tau_y: 正值使機體繞Y軸正向旋轉(增加pitch角theta)
+        # tau_z: 正值使機體繞Z軸正向旋轉(增加yaw角psi)
+        # F_total: 總推力，沿機體Z軸向上
+        
+        # Body frame to Inertial frame三角函數
         c_phi = np.cos(phi)
         s_phi = np.sin(phi)
         c_theta = np.cos(theta)
@@ -76,22 +67,28 @@ class QuadrotorPlant:
         c_psi = np.cos(psi)
         s_psi = np.sin(psi)
         
-        # inertial frame
-        ax = (s_theta * F_total) / self.m - self.kd * vx
-        ay = (s_phi * c_theta * F_total) / self.m - self.kd * vy
-        az = (c_phi * c_theta * F_total) / self.m - self.g - self.kd * vz
+        # 加速度計算 (inertial frame)
+        # 這些方程與MATLAB完全一致
+        ax = -F_total * s_theta / self.m - self.kd * vx
+        ay = F_total * c_theta * s_phi / self.m - self.kd * vy
+        az = F_total * c_theta * c_phi / self.m - self.g - self.kd * vz
         
-        # 歐拉角速度到機體角速度的轉換矩陣 transition matrix for Euler_a to Body_a
-        phi_dot = p + s_phi * s_theta / c_theta * q + c_phi * s_theta / c_theta * r
+        # 保護計算，防止數值問題
+        tan_theta = s_theta / (c_theta + 1e-6)  # 加小值防止除零
+        sec_theta = 1 / (c_theta + 1e-6)  # 加小值防止除零
+        
+        # 歐拉角運動學方程，與MATLAB一致
+        phi_dot = p + s_phi * tan_theta * q + c_phi * tan_theta * r
         theta_dot = c_phi * q - s_phi * r
-        psi_dot = s_phi / c_theta * q + c_phi / c_theta * r
+        psi_dot = s_phi * sec_theta * q + c_phi * sec_theta * r
         
-        # acceleration (Body frame)
-        p_dot = (tau_x + (self.Iy - self.Iz) * q * r) / self.Ix - self.kd_ang * p
-        q_dot = (tau_y + (self.Iz - self.Ix) * p * r) / self.Iy - self.kd_ang * q
-        r_dot = (tau_z + (self.Ix - self.Iy) * p * q) / self.Iz - self.kd_ang * r
+        # 角加速度計算 (Body frame)
+        # 確保力矩定義與MATLAB一致
+        p_dot = ((self.Iy - self.Iz) * q * r + tau_x) / self.Ix - self.kd_ang * p
+        q_dot = ((self.Iz - self.Ix) * p * r + tau_y) / self.Iy - self.kd_ang * q
+        r_dot = ((self.Ix - self.Iy) * p * q + tau_z) / self.Iz - self.kd_ang * r
         
-        # return state
+        # 返回狀態導數
         state_dot = np.array([vx, vy, vz, ax, ay, az, phi_dot, theta_dot, psi_dot, p_dot, q_dot, r_dot])
         return state_dot
         
@@ -99,7 +96,7 @@ class QuadrotorPlant:
         if control_input is not None:
             self.set_control_input(control_input)
             
-        # to compute the next state by solved ODE
+        # 使用RK45解微分方程
         sol = solve_ivp(
             fun=lambda t, y: self.dynamics(t, y, self.control_input),
             t_span=[0, dt],
@@ -130,7 +127,7 @@ class QuadrotorPlant:
         x, y, z = self.state[:3]
         phi, theta, psi = self.state[6:9]
         
-        # rotate matrix
+        # 旋轉矩陣 - Body frame to Inertial frame
         c_phi = np.cos(phi)
         s_phi = np.sin(phi)
         c_theta = np.cos(theta)
@@ -138,22 +135,22 @@ class QuadrotorPlant:
         c_psi = np.cos(psi)
         s_psi = np.sin(psi)
         
-        # body frame to inertial frame 
+        # 計算旋轉矩陣
         R = np.array([
             [c_theta*c_psi, s_phi*s_theta*c_psi - c_phi*s_psi, c_phi*s_theta*c_psi + s_phi*s_psi],
             [c_theta*s_psi, s_phi*s_theta*s_psi + c_phi*c_psi, c_phi*s_theta*s_psi - s_phi*c_psi],
             [-s_theta, s_phi*c_theta, c_phi*c_theta]
         ])
         
-        # motor position in body frame
+        # 十字形配置的馬達位置 (Body frame)
+        # 按順時針順序：前、右、後、左
         motor_pos_body = np.array([
-            [self.l, 0, 0],
-            [0, self.l, 0],
-            [-self.l, 0, 0],
-            [0, -self.l, 0]
+            [self.l, 0, 0],   # 前
+            [0, self.l, 0],   # 右
+            [-self.l, 0, 0],  # 後
+            [0, -self.l, 0]   # 左
         ])
         
-        # convert to inertial frame
+        # 將馬達位置從Body frame轉換到Inertial frame
         motor_pos_world = np.array([x, y, z]) + np.dot(motor_pos_body, R.T)
-        # print(f'world : {motor_pos_world}')
         return motor_pos_world

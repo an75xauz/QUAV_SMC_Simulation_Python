@@ -277,7 +277,7 @@ def main():
     parser = argparse.ArgumentParser(description='Control simulation')
     parser.add_argument('--initial', type=float, nargs=3, default=[0, 0, 0],
                         help='Initial Position [x y z] (Default: [0 0 0])')
-    parser.add_argument('--target', type=float, nargs=3, default=[10, 10, 0],
+    parser.add_argument('--target', type=float, nargs=3, default=[0, 1, 1],
                         help='Target Position [x y z] (Default: [1 1 1])')
     parser.add_argument('--time', type=float, default=10,
                         help='Simulation times (s) (Default: 10.0)')
