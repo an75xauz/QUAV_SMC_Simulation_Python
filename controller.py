@@ -9,6 +9,7 @@ class QuadrotorSMCController:
         self.Ixx = plant.Ix
         self.Iyy = plant.Iy
         self.Izz = plant.Iz
+        self.max_U1 = 30
         # Parameters setting
         # 高度控制參數 height
         self.lambda_alt = 2.8    # z  slope = 2.8
@@ -78,13 +79,14 @@ class QuadrotorSMCController:
         s_alt = e_z_dot + self.lambda_alt * e_z
         
         # 等效控制項
-        U1_eq = self.g + self.lambda_alt * vz
+        U1_eq = self.g - self.lambda_alt * vz
         
         # 切換控制項
         U1_sw = self.eta_alt * np.tanh(self.k_smooth * s_alt)
         
         # 總推力
         U1 = self.m * (U1_eq + U1_sw) / denom
+        U1 = np.clip(U1, 0, self.max_U1)
         U1 = max(U1, 0.1)  # 確保推力為正且非零，避免除以零的錯誤
         
         # 保護因子，防止除以非常小的值
