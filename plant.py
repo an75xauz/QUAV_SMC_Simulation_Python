@@ -9,7 +9,7 @@ class QuadrotorPlant:
         self.g = 9.8  # (m/s^2)
         self.l = 0.2  # (m)
         
-        # (kg*m^2)
+        #  moment of inertia (kg*m^2)
         self.Ix = 0.0211
         self.Iy = 0.0219
         self.Iz = 0.0366
