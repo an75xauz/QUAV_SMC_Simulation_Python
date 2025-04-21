@@ -104,10 +104,3 @@ Key controller parameters that can be adjusted in `controller.py`:
 - `k_smooth`, `k_smooth_pos`: Smoothing factors for control signal
 - `max_angle`: Safety limit for maximum attitude angles
 
-## License
-
-[Include your license information here]
-
-## Acknowledgments
-
-[Include any acknowledgments or references here]
