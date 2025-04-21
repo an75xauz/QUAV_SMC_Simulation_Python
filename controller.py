@@ -24,8 +24,8 @@ class QuadrotorSMCController:
         self.eta_pos = 0.5      # pose gain 0.05
         
         # 平滑因子 smaller smoothly
-        self.k_smooth = 50     # tanh 平滑因子 50.0
-        self.k_smooth_pos = 50 # 位置控制平滑因子 50.0
+        self.k_smooth = 0.5     # tanh 平滑因子 50.0
+        self.k_smooth_pos = 0.5 # 位置控制平滑因子 50.0
         
         # angel limitation(rad)
         self.max_angle = 30 * np.pi/180
