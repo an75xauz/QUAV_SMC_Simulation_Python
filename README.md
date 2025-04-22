@@ -148,7 +148,3 @@ The simulation provides two visualization modes:
 2. **Static Plots**: Generates comprehensive plots of trajectory, position, attitude, and control inputs
 
 The 3D visualization represents the quadrotor as a central body with four arms extending to motors, with the trajectory shown as an orange dashed line.
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
