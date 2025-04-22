@@ -1,182 +1,259 @@
+"""
+Sliding Mode Controller (SMC) for Quadrotor UAV.
+
+This module implements a Sliding Mode Controller for quadrotor position and attitude control.
+The controller uses sliding surfaces and control laws to ensure robust tracking performance.
+"""
+
 import numpy as np
+from typing import List, Any
+
 
 class QuadrotorSMCController:
-    def __init__(self, plant):
+    """Sliding Mode Controller for quadrotor UAV position and attitude control.
+    
+    This controller implements sliding mode control techniques to achieve robust
+    position and attitude tracking for a quadrotor UAV in the presence of 
+    uncertainties and disturbances.
+    
+    Attributes:
+        plant: The quadrotor plant model
+        m: Mass of the quadrotor (kg)
+        g: Gravitational acceleration (m/s²)
+        l: Arm length of the quadrotor (m)
+        Ixx: Moment of inertia around x-axis (kg·m²)
+        Iyy: Moment of inertia around y-axis (kg·m²)
+        Izz: Moment of inertia around z-axis (kg·m²)
+        lambda_alt: Altitude control slope parameter
+        eta_alt: Altitude control gain parameter
+        lambda_att: Attitude control slope parameter
+        eta_att: Attitude control gain parameter
+        lambda_pos: Position control slope parameter
+        eta_pos: Position control gain parameter
+        k_smooth: Smoothing factor for control inputs
+        k_smooth_pos: Position control smoothing factor
+        max_angle: Maximum allowed angle for roll and pitch (rad)
+        target_position: Target position [x, y, z] (m)
+        target_attitude: Target attitude [roll, pitch, yaw] (rad)
+        prev_error_pos: Previous position error
+        prev_error_att: Previous attitude error
+    """
+    
+    def __init__(self, plant: Any) -> None:
+        """Initialize the SMC controller with plant parameters.
+        
+        Args:
+            plant: The quadrotor plant model containing mass, inertia, etc.
+        """
+        # Plant parameters
         self.plant = plant
         self.m = plant.m
         self.g = plant.g
         self.l = plant.l
-        self.Ixx = plant.Ix
-        self.Iyy = plant.Iy
-        self.Izz = plant.Iz
-        # Parameters setting
-        # 高度控制參數 height
-        self.lambda_alt = 2.8    # z  slope = 2.8
-        self.eta_alt = 20.0      # z gain 20
+        # Use consistent naming with plant.py
+        self.Ix = plant.Ix
+        self.Iy = plant.Iy
+        self.Iz = plant.Iz
         
-        # 姿態控制參數 attitude
-        self.lambda_att = 30.0   # attitude slope 30
-        self.eta_att = 9.0       # attitude gain 9
+        # Control parameters
+        # Altitude control parameters
+        self.lambda_alt = 2.8    # Altitude sliding surface slope
+        self.eta_alt = 20.0      # Altitude control gain
         
-        # 位置控制參數 position
-        self.lambda_pos = 0.5  # pos slope 0.25
-        self.eta_pos = 0.5      # pose gain 0.05
+        # Attitude control parameters
+        self.lambda_att = 30.0   # Attitude sliding surface slope
+        self.eta_att = 9.0       # Attitude control gain
         
-        # 平滑因子 smaller smoothly
-        self.k_smooth = 0.5     # tanh 平滑因子 50.0
-        self.k_smooth_pos = 0.5 # 位置控制平滑因子 50.0
+        # Position control parameters
+        self.lambda_pos = 0.5    # Position sliding surface slope
+        self.eta_pos = 0.5       # Position control gain
         
-        # angel limitation(rad)
-        self.max_angle = 30 * np.pi/180
+        # Smoothing factors
+        self.k_smooth = 0.5      # Smoothing factor for tanh function
+        self.k_smooth_pos = 0.5  # Position control smoothing factor
         
+        # Angle limitation (rad)
+        self.max_angle = 30 * np.pi/180  # 30 degrees in radians
+        
+        # Target states
         self.target_position = np.zeros(3)
         self.target_attitude = np.zeros(3)
         
+        # Previous errors for monitoring
         self.prev_error_pos = np.zeros(3)
         self.prev_error_att = np.zeros(3)
         
-    def reset(self):
+    def reset(self) -> None:
+        """Reset controller internal states."""
         self.prev_error_pos = np.zeros(3)
         self.prev_error_att = np.zeros(3)
         
-    def set_target_position(self, position):
+    def set_target_position(self, position: List[float]) -> None:
+        """Set the target position for the controller.
+        
+        Args:
+            position: Target position [x, y, z] in meters
+        """
         self.target_position = np.array(position)
         
-    def set_target_attitude(self, attitude):
+    def set_target_attitude(self, attitude: List[float]) -> None:
+        """Set the target attitude for the controller.
+        
+        Args:
+            attitude: Target attitude [roll, pitch, yaw] in radians
+        """
         self.target_attitude = np.array(attitude)
         
-    def update(self, dt):
-        # current state
+    def update(self, dt: float) -> np.ndarray:
+        """Update controller and compute control inputs.
+        
+        This method implements the sliding mode control algorithm to compute
+        the control inputs based on the current state of the quadrotor.
+        
+        Args:
+            dt: Time step in seconds
+            
+        Returns:
+            np.ndarray: Control inputs [U2, U3, U4, U1] where:
+                U1: Total thrust
+                U2: Roll torque
+                U3: Pitch torque
+                U4: Yaw torque
+        """
+        # Get current state from plant
         state = self.plant.get_state()
         position = state[:3]               # x, y, z
         velocity = state[3:6]              # vx, vy, vz
-        attitude = state[6:9]              # φ, θ, ψ
+        attitude = state[6:9]              # φ, θ, ψ (roll, pitch, yaw)
         angular_velocity = state[9:12]     # p, q, r
         
-        # 提取各個狀態
+        # Extract individual state components
         x, y, z = position
         vx, vy, vz = velocity
-        phi, theta, psi = attitude
+        phi, theta, psi = attitude  # roll, pitch, yaw
         p, q, r = angular_velocity
         
-        # 計算三角函數值
+        # Compute trigonometric values for coordinate transformations
         cos_phi = np.cos(phi)
         sin_phi = np.sin(phi)
         cos_theta = np.cos(theta)
         sin_theta = np.sin(theta)
         
-        # 防止分母為零的情況
+        # Prevent division by zero
         denom = cos_theta * cos_phi
-        if abs(denom) < 1e-6:
-            denom = np.sign(denom) * 1e-6
+        denom = np.sign(denom) * max(abs(denom), 1e-6)
             
+        # -------------------- Altitude Control (Z-axis) --------------------
         z_d = self.target_position[2]
         e_z = z_d - z
-        e_z_dot = 0 - vz  # 假設目標高度不變，其導數為0
+        e_z_dot = 0 - vz  # Assuming target velocity is zero
         
-        # z 
-        s_alt = e_z_dot + self.lambda_alt * e_z
+        # Altitude sliding surface
+        sliding_surface_alt = e_z_dot + self.lambda_alt * e_z
         
-        # 等效控制項
-        U1_eq = self.g + self.lambda_alt * vz
+        # Equivalent control term for altitude
+        thrust_eq = self.g + self.lambda_alt * vz
         
-        # 切換控制項
-        U1_sw = self.eta_alt * np.tanh(self.k_smooth * s_alt)
+        # Switching control term for altitude with smoothing
+        thrust_sw = self.eta_alt * np.tanh(self.k_smooth * sliding_surface_alt)
         
-        # 總推力
-        U1 = self.m * (U1_eq + U1_sw) / denom
-        U1 = max(U1, 0.1)  # 確保推力為正且非零，避免除以零的錯誤
+        # Total thrust force
+        total_thrust = self.m * (thrust_eq + thrust_sw) / denom
+        total_thrust = max(total_thrust, 0.1)  # Ensure positive non-zero thrust
         
-        # 保護因子，防止除以非常小的值
-        safe_U1 = max(U1, 0.1)
+        # Safety factor to prevent division by small values
+        safe_thrust = max(total_thrust, 0.1)
         
-        # X 方向控制 - 對應 theta 俯仰角
+        # -------------------- Position Control (X-axis) --------------------
+        # Maps to pitch angle (theta)
         x_d = self.target_position[0]
         e_x = x_d - x
-        e_x_dot = 0 - vx  
+        e_x_dot = 0 - vx  # Assuming target velocity is zero
         
-        # X 方向滑動面
-        s_x = e_x_dot + self.lambda_pos * e_x
+        # X-direction sliding surface
+        sliding_surface_x = e_x_dot + self.lambda_pos * e_x
         
-        # 等效控制項和切換控制項
-        # 注意：確保與plant.py中的動力學方程一致
-        # ax = -F_total * s_theta / self.m，所以我們需要負的Ux產生正的theta，從而產生正的ax
-        Ux_eq = -(self.m/safe_U1) * self.lambda_pos * (-vx)  
-        Ux_sw = self.eta_pos * np.tanh(self.k_smooth_pos * s_x)
+        # Equivalent control and switching control terms
+        # In plant dynamics: ax = -F_total * sin(theta) / m
+        # Negative x_virtual_control creates positive theta, which creates positive ax
+        x_control_eq = -(self.m/safe_thrust) * self.lambda_pos * (-vx)
+        x_control_sw = self.eta_pos * np.tanh(self.k_smooth_pos * sliding_surface_x)
         
-        # 虛擬控制輸入
-        Ux = Ux_eq + Ux_sw
+        # Virtual control input for X direction
+        x_virtual_control = x_control_eq + x_control_sw
         
-        # prevent arcsin has error trace back
-        Ux = np.clip(Ux, -0.99, 0.99)
-        theta_d = -np.arcsin(Ux)
+        # Prevent arcsin domain error
+        x_virtual_control = np.clip(x_virtual_control, -0.99, 0.99)
+        theta_d = -np.arcsin(x_virtual_control)
         
-        # Y 方向控制 - 對應 phi 滾轉角
+        # -------------------- Position Control (Y-axis) --------------------
+        # Maps to roll angle (phi)
         y_d = self.target_position[1]
         e_y = y_d - y
-        e_y_dot = 0 - vy
+        e_y_dot = 0 - vy  # Assuming target velocity is zero
         
-        # Y 方向滑動面
-        s_y = e_y_dot + self.lambda_pos * e_y
+        # Y-direction sliding surface
+        sliding_surface_y = e_y_dot + self.lambda_pos * e_y
         
-        # 保護因子，防止除以非常小的值
-        safe_cos_theta = max(abs(cos_theta), 1e-3) * np.sign(cos_theta)
+        # Safety factor for cos(theta)
+        safe_cos_theta = np.sign(cos_theta) * max(abs(cos_theta), 1e-3)
         
-        # 等效控制項和切換控制項
-        # 注意：確保與plant.py中的動力學方程一致
-        # ay = F_total * c_theta * s_phi / self.m，所以我們需要正的Uy產生正的phi，從而產生正的ay
-        Uy_eq = (self.m/safe_U1) * self.lambda_pos * (-vy) / safe_cos_theta 
-        Uy_sw = self.eta_pos * np.tanh(self.k_smooth_pos * s_y)
+        # Equivalent control and switching control terms
+        # In plant dynamics: ay = F_total * cos(theta) * sin(phi) / m
+        # Positive y_virtual_control creates positive phi, which creates positive ay
+        y_control_eq = (self.m/safe_thrust) * self.lambda_pos * (-vy) / safe_cos_theta
+        y_control_sw = self.eta_pos * np.tanh(self.k_smooth_pos * sliding_surface_y)
         
-        # 虛擬控制輸入
-        Uy = Uy_eq + Uy_sw
+        # Virtual control input for Y direction
+        y_virtual_control = y_control_eq + y_control_sw
         
-        # prevent arcsin has error trace back
-        Uy = np.clip(Uy, -0.99, 0.99)
-        phi_d = np.arcsin(Uy)
+        # Prevent arcsin domain error
+        y_virtual_control = np.clip(y_virtual_control, -0.99, 0.99)
+        phi_d = np.arcsin(y_virtual_control)
         
-        # 限制期望角度在安全範圍內
-        # prevent too large angle
-        phi_d = max(min(phi_d, self.max_angle), -self.max_angle)
-        theta_d = max(min(theta_d, self.max_angle), -self.max_angle)
+        # Limit desired angles for safety
+        phi_d = np.clip(phi_d, -self.max_angle, self.max_angle)
+        theta_d = np.clip(theta_d, -self.max_angle, self.max_angle)
         
-        # 期望偏航角
+        # Target yaw angle
         psi_d = self.target_attitude[2]
         
-      
-        # 滾轉角控制
+        # -------------------- Attitude Control --------------------
+        # Roll control
         e_phi = phi_d - phi
-        s_phi = p + self.lambda_att * e_phi
+        sliding_surface_roll = p + self.lambda_att * e_phi
         
-        U2_eq = -((self.Iyy - self.Izz) * q * r + self.Ixx * self.lambda_att * p)
-        U2_sw = self.Ixx * self.eta_att * np.tanh(self.k_smooth * s_phi)
-        U2 = U2_eq + U2_sw
+        roll_torque_eq = -((self.Iy - self.Iz) * q * r + self.Ix * self.lambda_att * p)
+        roll_torque_sw = self.Ix * self.eta_att * np.tanh(self.k_smooth * sliding_surface_roll)
+        roll_torque = roll_torque_eq + roll_torque_sw
         
-        # 俯仰角控制
+        # Pitch control
         e_theta = theta_d - theta
-        s_theta = q + self.lambda_att * e_theta
+        sliding_surface_pitch = q + self.lambda_att * e_theta
         
-        U3_eq = -((self.Izz - self.Ixx) * p * r + self.Iyy * self.lambda_att * q)
-        U3_sw = self.Iyy * self.eta_att * np.tanh(self.k_smooth * s_theta)
-        U3 = U3_eq + U3_sw
+        pitch_torque_eq = -((self.Iz - self.Ix) * p * r + self.Iy * self.lambda_att * q)
+        pitch_torque_sw = self.Iy * self.eta_att * np.tanh(self.k_smooth * sliding_surface_pitch)
+        pitch_torque = pitch_torque_eq + pitch_torque_sw
         
-        # 偏航角控制
+        # Yaw control
         e_psi = psi_d - psi
-        s_psi = r + self.lambda_att * e_psi
+        sliding_surface_yaw = r + self.lambda_att * e_psi
         
-        U4_eq = -((self.Ixx - self.Iyy) * p * q + self.Izz * self.lambda_att * r)
-        U4_sw = self.Izz * self.eta_att * np.tanh(self.k_smooth * s_psi)
-        U4 = U4_eq + U4_sw
+        yaw_torque_eq = -((self.Ix - self.Iy) * p * q + self.Iz * self.lambda_att * r)
+        yaw_torque_sw = self.Iz * self.eta_att * np.tanh(self.k_smooth * sliding_surface_yaw)
+        yaw_torque = yaw_torque_eq + yaw_torque_sw
         
-        # 確保控制輸入不包含 NaN 或 Inf
-        # Make sure input will not contain NaN or Inf
-        control_out = np.array([U2, U3, U4, U1])
+        # Ensure control inputs do not contain NaN or Inf values
+        control_out = np.array([roll_torque, pitch_torque, yaw_torque, total_thrust])
         control_out = np.nan_to_num(control_out, nan=0.0, posinf=50.0, neginf=-50.0)
         
-        # 更新內部狀態
+        # Update internal state
         self.prev_error_pos = np.array([e_x, e_y, e_z])
         self.prev_error_att = np.array([e_phi, e_theta, e_psi])
-        # control_out: 
-        # U1: F_total 
-        # U2 U3 U4: torqe
+        
+        # Return control outputs:
+        # control_out[0]: Roll torque (around x-axis)
+        # control_out[1]: Pitch torque (around y-axis)
+        # control_out[2]: Yaw torque (around z-axis)
+        # control_out[3]: Total thrust force
         return control_out
