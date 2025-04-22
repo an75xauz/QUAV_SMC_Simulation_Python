@@ -6,7 +6,7 @@ The controller uses sliding surfaces and control laws to ensure robust tracking 
 """
 
 import numpy as np
-from typing import List, Any
+from typing import List, Tuple, Optional, Union, Any
 
 
 class QuadrotorSMCController:
