@@ -7,7 +7,7 @@ rigid body dynamics, aerodynamic effects, and coordinate transformations.
 
 import numpy as np
 from scipy.integrate import solve_ivp
-from typing import List, Tuple, Optional, Union, Any, Callable
+from typing import Optional, Any
 
 
 class QuadrotorPlant:

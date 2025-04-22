@@ -9,8 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import matplotlib.gridspec as gridspec
-from mpl_toolkits.mplot3d import Axes3D
-from typing import List, Optional, Union
+from typing import List
 
 
 class QuadrotorSimulator:
