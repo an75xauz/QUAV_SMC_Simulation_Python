@@ -57,12 +57,15 @@ class QuadrotorSMCController:
         
         # Control parameters
         # Altitude control parameters
-        self.lambda_alt = 2.8    # Altitude sliding surface slope
-        self.eta_alt = 20.0      # Altitude control gain
+        self.lambda_alt = 2.3    # Altitude sliding surface slope
+        self.eta_alt = 25.0      # Altitude control gain
         
         # Attitude control parameters
-        self.lambda_att = 30.0   # Attitude sliding surface slope
-        self.eta_att = 9.0       # Attitude control gain
+        self.lambda_att = 30  # roll pitch sliding surface slope
+        self.eta_att = 25     # roll pitch control gain
+        # yall control parameters
+        self.lambda_att_yall = 30   # yall sliding surface slope
+        self.eta_att_yall = 9.0       # yall control gain
         
         # Position control parameters
         self.lambda_pos = 0.5    # Position sliding surface slope
@@ -74,6 +77,10 @@ class QuadrotorSMCController:
         
         # Angle limitation (rad)
         self.max_angle = 30 * np.pi/180  # 30 degrees in radians
+
+        # Maximum torque
+        self.max_roll_pitch_torque = 0.65  # Roll/Pitch  (Nm)
+        self.max_yaw_torque = 0.6         # Yaw  (Nm)
         
         # Target states
         self.target_position = np.zeros(3)
@@ -220,7 +227,7 @@ class QuadrotorSMCController:
         
         # -------------------- Attitude Control --------------------
         # Roll control
-        e_phi = phi_d - phi
+        e_phi = (phi_d - phi)
         sliding_surface_roll = p + self.lambda_att * e_phi
         
         roll_torque_eq = -((self.Iy - self.Iz) * q * r + self.Ix * self.lambda_att * p)
@@ -237,10 +244,10 @@ class QuadrotorSMCController:
         
         # Yaw control
         e_psi = psi_d - psi
-        sliding_surface_yaw = r + self.lambda_att * e_psi
+        sliding_surface_yaw = r + self.lambda_att_yall * e_psi
         
-        yaw_torque_eq = -((self.Ix - self.Iy) * p * q + self.Iz * self.lambda_att * r)
-        yaw_torque_sw = self.Iz * self.eta_att * np.tanh(self.k_smooth * sliding_surface_yaw)
+        yaw_torque_eq = -((self.Ix - self.Iy) * p * q + self.Iz * self.lambda_att_yall * r)
+        yaw_torque_sw = self.Iz * self.eta_att_yall * np.tanh(self.k_smooth * sliding_surface_yaw)
         yaw_torque = yaw_torque_eq + yaw_torque_sw
         
         # Ensure control inputs do not contain NaN or Inf values
