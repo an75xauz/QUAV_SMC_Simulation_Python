@@ -8,9 +8,9 @@ It handles parameter configuration and initializes the simulation environment.
 import argparse
 import time
 
-from plant import QuadrotorPlant
-from controller import QuadrotorSMCController
-from sim import QuadrotorSimulator
+from simulation.plant import QuadrotorPlant
+from simulation.controller import QuadrotorSMCController
+from simulation.sim import QuadrotorSimulator
 
 
 def main():
