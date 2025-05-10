@@ -2,8 +2,8 @@ import gym
 import numpy as np
 from gym import spaces
 
-from plant import QuadrotorPlant
-from controller import QuadrotorSMCController
+from simulation.plant import QuadrotorPlant
+from simulation.controller import QuadrotorSMCController
 
 class QuadrotorEnv(gym.Env):
     """四旋翼機強化學習環境，使用SMC控制器參數作為動作"""

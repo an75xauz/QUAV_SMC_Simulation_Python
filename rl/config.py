@@ -24,7 +24,7 @@ POLICY_DELAY = 2
 LR = 1e-3
 
 # Training parameters
-MAX_EPISODES = 500        # Total training episodes
+MAX_EPISODES = 50         # Total training episodes
 MAX_STEPS = 200           # Maximum steps per episode
 EXPL_NOISE = 0.1          # Std of Gaussian exploration noise added to actions
 SAVE_INTERVAL = 50        # Episodes between saving model checkpoints

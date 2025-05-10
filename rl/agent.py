@@ -63,6 +63,14 @@ class ReplayBuffer:
         self.done = np.zeros((max_size, 1))
 
     def add(self, state, action, next_state, reward, done):
+        if isinstance(state, torch.Tensor):
+            state = state.cpu().detach().numpy()
+        if isinstance(action, torch.Tensor):
+            action = action.cpu().detach().numpy()
+        if isinstance(next_state, torch.Tensor):
+            next_state = next_state.cpu().detach().numpy()
+        if isinstance(reward, torch.Tensor):
+            reward = reward.cpu().detach().numpy()
         # 儲存一筆經驗（狀態、動作、獎勵、下個狀態、是否結束）
         self.state[self.ptr] = state
         self.action[self.ptr] = action
@@ -103,15 +111,23 @@ class TD3Agent:
         self.device = device
         self.gamma = gamma
         self.tau = tau
-        self.policy_noise = policy_noise
-        self.noise_clip = noise_clip
-        self.policy_delay = policy_delay
-        self.max_action = max_action
+        self.policy_delay = torch.tensor(policy_delay, dtype=torch.float32).to(device)
+        # 將 NumPy 陣列轉換為 PyTorch 張量
+
+        self.policy_noise = torch.tensor(policy_noise, dtype=torch.float32).to(device)
+
+            
+        self.noise_clip = torch.tensor(noise_clip, dtype=torch.float32).to(device)
+
+        if isinstance(max_action, np.ndarray):
+            self.max_action = torch.tensor(max_action, dtype=torch.float32).to(device)
+        else:
+            self.max_action = torch.tensor([max_action], dtype=torch.float32).to(device)
 
         # 建立 Actor 和 Actor 的 target 網路
         # Initialize actor and critic networks
-        self.actor = Actor(state_dim, action_dim, max_action, hidden_sizes).to(device)
-        self.actor_target = Actor(state_dim, action_dim, max_action, hidden_sizes).to(device)
+        self.actor = Actor(state_dim, action_dim, self.max_action, hidden_sizes).to(device)
+        self.actor_target = Actor(state_dim, action_dim, self.max_action, hidden_sizes).to(device)
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=lr)
 
@@ -128,11 +144,12 @@ class TD3Agent:
 
     def select_action(self, state, noise=0.0):
         """Select an action given a state (with optional exploration noise).根據目前的狀態選擇動作，可以加入噪聲來探索"""
-        state_tensor = torch.FloatTensor(state.reshape(1, -1)).to(self.device)
+        state_tensor = torch.tensor(state.reshape(1, -1), dtype=torch.float32).to(self.device)
         action = self.actor(state_tensor).cpu().data.numpy().flatten()
         if noise != 0.0:
             action = action + np.random.normal(0, noise, size=action.shape)
-        return np.clip(action, -self.max_action, self.max_action)
+        max_action_np = self.max_action.cpu().numpy() if torch.is_tensor(self.max_action) else self.max_action
+        return np.clip(action, -max_action_np, max_action_np)
 
     def train(self, batch_size):
         """Sample a batch and update the networks."""
@@ -143,15 +160,23 @@ class TD3Agent:
         # 從記憶庫中抽樣
         # Sample replay buffer
         state, action, next_state, reward, done = self.replay_buffer.sample(batch_size)
-        state = torch.FloatTensor(state).to(self.device)
-        action = torch.FloatTensor(action).to(self.device)
-        next_state = torch.FloatTensor(next_state).to(self.device)
-        reward = torch.FloatTensor(reward).to(self.device)
-        done = torch.FloatTensor(done).to(self.device)
+        # 轉換為張量並移至設備
+        state = torch.tensor(state, dtype=torch.float32).to(self.device)
+        action = torch.tensor(action, dtype=torch.float32).to(self.device)
+        next_state = torch.tensor(next_state, dtype=torch.float32).to(self.device)
+        reward = torch.tensor(reward, dtype=torch.float32).to(self.device)
+        done = torch.tensor(done, dtype=torch.float32).to(self.device)
 
         # 計算下一步的動作，並加入隨機噪聲（增加探索）
         # Compute target actions with noise
-        noise = (torch.randn_like(action) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
+        # 直接在這裡轉換為張量
+        policy_noise_tensor = self.policy_noise.clone().detach()
+        noise_clip_tensor = self.noise_clip.clone().detach()
+        
+        # 使用轉換後的張量進行操作
+        noise = (torch.randn_like(action) * policy_noise_tensor).clamp(-noise_clip_tensor, noise_clip_tensor)
+
+        # noise = (torch.randn_like(action) * self.policy_noise).clamp(-self.noise_clip, self.noise_clip)
         next_action = (self.actor_target(next_state) + noise).clamp(-self.max_action, self.max_action)
 
         # Compute target Q-value

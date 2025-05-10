@@ -5,16 +5,16 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
 
-from register_env import make_env
-from agent import TD3Agent
-from config import HIDDEN_SIZES, GAMMA, TAU, POLICY_NOISE, NOISE_CLIP, POLICY_DELAY, LR
-from config import BUFFER_SIZE, BATCH_SIZE, MAX_EPISODES, MAX_STEPS, EXPL_NOISE, SAVE_INTERVAL
+from rl.register_env import make_env
+from rl.agent import TD3Agent
+from rl.env_UAV import QuadrotorEnv
+from rl.config import *
 
 def train(
     initial_position=[0, 0, 0],
     target_position=[1, 1, 2],
     seed=0,
-    eval_freq=10,
+    eval_freq=10, #每()eqisode檢查性能
     max_episodes=MAX_EPISODES,
     save_dir="checkpoints"
 ):
@@ -173,20 +173,20 @@ def plot_training_results(episode_rewards, avg_rewards, eval_rewards, eval_freq,
     
     # 繪製每個回合的獎勵
     episodes = list(range(1, len(episode_rewards) + 1))
-    ax.plot(episodes, episode_rewards, 'b-', alpha=0.3, label='回合獎勵')
+    ax.plot(episodes, episode_rewards, 'b-', alpha=0.3, label='Episodes Rewards')
     
     # 繪製移動平均獎勵
-    ax.plot(episodes, avg_rewards, 'r-', label='平均獎勵(10回合)')
+    ax.plot(episodes, avg_rewards, 'r-', label='avg rewards(10 episodes)')
     
     # 繪製評估獎勵
     eval_episodes = list(range(eval_freq, len(episode_rewards) + 1, eval_freq))
     if len(eval_episodes) > len(eval_rewards):
         eval_episodes = eval_episodes[:len(eval_rewards)]
-    ax.plot(eval_episodes, eval_rewards, 'g-', label='評估獎勵')
+    ax.plot(eval_episodes, eval_rewards, 'g-', label='eval rewards')
     
-    ax.set_xlabel('回合')
-    ax.set_ylabel('獎勵')
-    ax.set_title('TD3訓練曲線：SMC控制器參數優化')
+    ax.set_xlabel('episode')
+    ax.set_ylabel('reward')
+    ax.set_title('TD3 training curve')
     ax.legend()
     ax.grid(True)
     
