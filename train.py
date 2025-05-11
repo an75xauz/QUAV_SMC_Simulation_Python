@@ -1,10 +1,13 @@
 import os
 import numpy as np
 import torch
+import matplotlib
+matplotlib.use('Agg')  # 使用非互動式後端，不會顯示視窗
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
 
+from plot_utils import plot_training_metrics, plot_training_results, plot_loss
 from rl.register_env import make_env
 from rl.agent import TD3Agent
 from rl.env_UAV import QuadrotorEnv
@@ -14,7 +17,7 @@ def train(
     initial_position=[0, 0, 0],
     target_position=[1, 1, 2],
     seed=0,
-    eval_freq=10, #每()eqisode檢查性能
+    eval_freq=ECAL_FREQ, #每()eqisode檢查性能
     max_episodes=MAX_EPISODES,
     save_dir="checkpoints"
 ):
@@ -75,11 +78,13 @@ def train(
         state = env.reset()
         episode_reward = 0
         episode_steps = 0
-        
+        # 記錄當前回合的控制參數
+        episode_actions = []
+
         # 單一回合循環
         for step in range(MAX_STEPS):
             # 選擇帶有探索噪聲的動作
-            if episode < 10:  # 前幾回合使用默認參數，但有探索
+            if episode < 20:  # 前幾回合使用默認參數，但有探索
                 action = default_params * (1.0 + EXPL_NOISE * (np.random.rand(action_dim) - 0.5))
             else:
                 action = agent.select_action(np.array(state))
@@ -90,7 +95,10 @@ def train(
                 
             # 執行動作
             next_state, reward, done, info = env.step(action)
-            
+
+            # 記錄本回合使用的控制參數
+            episode_actions.append(action.copy())
+
             # 將轉換儲存到回放緩衝區
             agent.replay_buffer.add(state, action, next_state, reward, done)
             
@@ -121,7 +129,9 @@ def train(
             eval_reward = evaluate_agent(env, agent)
             eval_rewards.append(eval_reward)
             print(f"評估獎勵: {eval_reward:.2f}")
-            
+
+            plot_training_metrics(agent, episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir)
+
             # 保存最佳模型
             if eval_reward > best_reward:
                 best_reward = eval_reward
@@ -136,6 +146,7 @@ def train(
             
             # 保存訓練曲線
             plot_training_results(episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir)
+            plot_loss(agent, save_dir)
     
     # 保存最終模型
     torch.save(agent.actor.state_dict(), f"{save_dir}/actor_final.pth")
@@ -143,9 +154,10 @@ def train(
     
     # 繪製訓練曲線
     plot_training_results(episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir)
-    
+    plot_loss(agent, save_dir)
     # 關閉環境
     env.close()
+
 
 def evaluate_agent(env, agent, n_episodes=5):
     """評估智能體在環境中的性能"""
@@ -167,31 +179,6 @@ def evaluate_agent(env, agent, n_episodes=5):
     
     return np.mean(rewards)
 
-def plot_training_results(episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir):
-    """繪製訓練結果"""
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    # 繪製每個回合的獎勵
-    episodes = list(range(1, len(episode_rewards) + 1))
-    ax.plot(episodes, episode_rewards, 'b-', alpha=0.3, label='Episodes Rewards')
-    
-    # 繪製移動平均獎勵
-    ax.plot(episodes, avg_rewards, 'r-', label='avg rewards(10 episodes)')
-    
-    # 繪製評估獎勵
-    eval_episodes = list(range(eval_freq, len(episode_rewards) + 1, eval_freq))
-    if len(eval_episodes) > len(eval_rewards):
-        eval_episodes = eval_episodes[:len(eval_rewards)]
-    ax.plot(eval_episodes, eval_rewards, 'g-', label='eval rewards')
-    
-    ax.set_xlabel('episode')
-    ax.set_ylabel('reward')
-    ax.set_title('TD3 training curve')
-    ax.legend()
-    ax.grid(True)
-    
-    plt.savefig(f"{save_dir}/training_curve.png")
-    plt.close()
 
 if __name__ == "__main__":
     # 命令行參數解析
@@ -199,7 +186,7 @@ if __name__ == "__main__":
     parser.add_argument('--initial', type=float, nargs=3, default=[0, 0, 0], help='初始位置[x, y, z]')
     parser.add_argument('--target', type=float, nargs=3, default=[1, 1, 2], help='目標位置[x, y, z]')
     parser.add_argument('--seed', type=int, default=0, help='隨機種子')
-    parser.add_argument('--eval_freq', type=int, default=10, help='評估頻率')
+    parser.add_argument('--eval_freq', type=int, default=ECAL_FREQ, help='評估頻率')
     parser.add_argument('--episodes', type=int, default=MAX_EPISODES, help='訓練回合數')
     parser.add_argument('--save_dir', type=str, default='checkpoints', help='模型保存目錄')
     

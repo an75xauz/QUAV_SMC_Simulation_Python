@@ -4,6 +4,7 @@ from gym import spaces
 
 from simulation.plant import QuadrotorPlant
 from simulation.controller import QuadrotorSMCController
+from rl.config import MAX_STEPS
 
 class QuadrotorEnv(gym.Env):
     """四旋翼機強化學習環境，使用SMC控制器參數作為動作"""
@@ -13,7 +14,7 @@ class QuadrotorEnv(gym.Env):
                  target_position=[1, 1, 2],
                  random_target=True,
                  target_range=[3.0, 3.0, 3.0],
-                 max_steps=300,
+                 max_steps=MAX_STEPS,
                  dt=0.05):
         """初始化環境"""
         super(QuadrotorEnv, self).__init__()
@@ -36,9 +37,10 @@ class QuadrotorEnv(gym.Env):
         
         # 定義動作空間 (SMC控制器參數)
         # 各參數的範圍需要根據實際情況調整
+        # [lambda_alt, eta_alt, lambda_att, eta_att, lambda_pos, eta_pos]
         self.action_space = spaces.Box(
             low=np.array([0.1, 1.0, 1.0, 1.0, 0.1, 0.1]),  # 最小值
-            high=np.array([10.0, 50.0, 100.0, 50.0, 5.0, 5.0]),  # 最大值
+            high=np.array([10.0, 40.0, 40.0, 40.0, 1, 1]),  # 最大值
             dtype=np.float32
         )
         
@@ -91,7 +93,7 @@ class QuadrotorEnv(gym.Env):
                 np.random.uniform(-3.0, 3.0),
                 np.random.uniform(0.0, 4.0)  # 確保高度為正
             ], dtype=np.float32)        
-        
+        print(f"target position:{self.target_position}")
         # 設置控制器目標
         self.controller.set_target_position(self.target_position)
         
@@ -165,44 +167,46 @@ class QuadrotorEnv(gym.Env):
         
         # 基於距離的基本獎勵
         normalized_distance = distance / np.linalg.norm(self.initial_position - self.target_position)
-        reward = -normalized_distance**2  # 離目標越遠，負獎勵越大
+        reward = -normalized_distance  # 離目標越遠，負獎勵越大
         
         # 接近目標的額外獎勵
         prev_normalized_distance = prev_distance / np.linalg.norm(self.initial_position - self.target_position)
         improvement = prev_normalized_distance - normalized_distance
-        reward += improvement * 5.0
+        reward += improvement * 20.0
 
         if distance < 0.2:
-            reward += 1.0  # 正獎勵
+            reward += 2.0  # 正獎勵
         
         # 姿態角偏差懲罰
-        orientation_penalty = np.sum(np.square(angles[:2])) * 0.5
+        orientation_penalty = np.sum(np.square(angles[:2])) * 0.05
         
         # 速度懲罰（希望平穩運動）
-        velocity_penalty = np.sum(np.square(velocity)) * 0.1
+        velocity_penalty = np.sum(np.square(velocity)) * 0.01
         
         # 角速度懲罰（希望穩定姿態）
-        ang_vel_penalty = np.sum(np.square(ang_vel)) * 0.1
+        ang_vel_penalty = np.sum(np.square(ang_vel)) * 0.01
         
         # 控制參數變化太大的懲罰（鼓勵平穩變化）
         param_change_penalty = 0.0
         if hasattr(self, 'prev_action'):
-            param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.1
+            param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.01
         self.prev_action = action.copy()
         
         # 扣除懲罰
-        reward -= (orientation_penalty + velocity_penalty + ang_vel_penalty + param_change_penalty)
+        reward -= (orientation_penalty + velocity_penalty + ang_vel_penalty + param_change_penalty)*0.1
         
         # 達到目標的大獎勵
         if distance < 0.2 and not self.reached_target:
             reward += 10.0
             self.reached_target = True
-            
+        # 飛出範圍的懲罰
+        if np.any(np.abs(position) > 15.0):
+            reward -= 100.0
         # 墜毀的大懲罰
         if position[2] < 0.0:
             reward -= 100.0
             
-        return reward
+        return np.clip(reward, -200.0, 200.0)
     
     def _is_done(self, state):
         """檢查回合是否結束"""
@@ -215,22 +219,24 @@ class QuadrotorEnv(gym.Env):
         
         # 檢查是否達到最大步數
         if self.step_count >= self.max_steps:
+            print("\t達到最大步數")
             return True
         
         # 檢查四旋翼機是否飛出範圍
         if np.any(np.abs(position) > 15.0):
+            print("\t飛出範圍")
             return True
         
         # 檢查是否墜毀
         if position[2] < 0.0:
+            print("\t墜毀")
             return True
         
-        # 檢查角度是否過大
-        if np.any(np.abs(angles) > np.pi/2):  # 超過90度
-            return True
         
         # 成功條件：達到目標並在那裡停留一段時間
         if distance < 0.2 and self.reached_target:
-            return self.step_count > 50
+            if self.step_count > 50:
+                print("\033[34m 成功!!! \033[0m")
+                return True
         
         return False

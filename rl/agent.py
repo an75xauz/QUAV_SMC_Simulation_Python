@@ -142,10 +142,21 @@ class TD3Agent:
 
         self.total_it = 0
 
+        # 增加監控指標追蹤
+        self.critic_losses = []
+        self.actor_losses = []
+        self.q_values = []
+        self.action_values = []
+
     def select_action(self, state, noise=0.0):
         """Select an action given a state (with optional exploration noise).根據目前的狀態選擇動作，可以加入噪聲來探索"""
         state_tensor = torch.tensor(state.reshape(1, -1), dtype=torch.float32).to(self.device)
         action = self.actor(state_tensor).cpu().data.numpy().flatten()
+
+        # 追蹤動作值
+        if hasattr(self, 'action_values'):
+            self.action_values.append(action.copy())
+            
         if noise != 0.0:
             action = action + np.random.normal(0, noise, size=action.shape)
         max_action_np = self.max_action.cpu().numpy() if torch.is_tensor(self.max_action) else self.max_action
@@ -186,9 +197,14 @@ class TD3Agent:
 
         # Get current Q estimates
         current_Q1, current_Q2 = self.critic(state, action)
+        # 追蹤Q值
+        self.q_values.append(current_Q1.mean().item())
 
         # Critic loss
         critic_loss = F.mse_loss(current_Q1, target_Q.detach()) + F.mse_loss(current_Q2, target_Q.detach())
+        # 追蹤Critic損失
+        self.critic_losses.append(critic_loss.item())
+
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
@@ -197,6 +213,8 @@ class TD3Agent:
         # 延遲更新 Actor 網路（每 policy_delay 次才更新一次）
         if self.total_it % self.policy_delay == 0:
             actor_loss = -self.critic.Q1(state, self.actor(state)).mean() #Loss function
+            self.actor_losses.append(actor_loss.item())
+
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             self.actor_optimizer.step()
