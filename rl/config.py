@@ -1,7 +1,7 @@
 # config.py
 # Hyperparameters for TD3 and training
 
-ENV_NAME = 'Pendulum-v1'   # Continuous control environment (Pendulum as an example)
+
 SEED = 0                   # Random seed for reproducibility
 
 # Network architecture
@@ -21,10 +21,11 @@ NOISE_CLIP = 0.5
 POLICY_DELAY = 2
 
 # Learning rate for both Actor and Critic optimizers
-LR = 1e-3
+LR = 1e-4
 
 # Training parameters
-MAX_EPISODES = 50         # Total training episodes
-MAX_STEPS = 200           # Maximum steps per episode
+MAX_EPISODES = 1000         # Total training episodes
+MAX_STEPS = 500           # Maximum steps per episode
 EXPL_NOISE = 0.1          # Std of Gaussian exploration noise added to actions
 SAVE_INTERVAL = 50        # Episodes between saving model checkpoints
+ECAL_FREQ = 50
