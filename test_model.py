@@ -26,8 +26,10 @@ def load_model(actor_path, device, state_dim=12, action_dim=6, hidden_sizes=[256
     min_action = np.array([0.1, 1.0, 1.0, 1.0, 0.1, 0.1])  # 最小值
     max_action = np.array([10.0, 40.0, 40.0, 40.0, 1, 1])  # 最大值
     
+    max_action_tensor = torch.tensor(max_action, dtype=torch.float32).to(device)
+    
     # 建立模型
-    actor = Actor(state_dim, action_dim, max_action, hidden_sizes).to(device)
+    actor = Actor(state_dim, action_dim, max_action_tensor, hidden_sizes).to(device)
     
     # 載入模型權重
     actor.load_state_dict(torch.load(actor_path, map_location=device))

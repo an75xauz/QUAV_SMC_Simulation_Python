@@ -66,11 +66,11 @@ class QuadrotorSimulator:
         self.max_time = 10.0  # Maximum simulation time (s)
         
         # Initialize data storage
-        self.trajectory = [self.plant.get_position()]
-        self.time_history = [self.t]
-        self.attitude_history = [self.plant.get_attitude()]
-        self.control_inputs_history = []
-        self.error_history = []
+        self.trajectory = np.array([self.plant.get_position()])
+        self.time_history = np.array([self.t])
+        self.attitude_history = np.array([self.plant.get_attitude()])
+        self.control_inputs_history = np.zeros((0, 4))  # 預設為空的控制輸入歷史 (4列對應4個控制輸入)
+        self.error_history = np.array([])  # 空的誤差歷史
         
         # Visualization objects
         self.fig = None
@@ -87,7 +87,7 @@ class QuadrotorSimulator:
         """
         # Compute control inputs
         control_input = self.controller.update(self.dt)
-        self.control_inputs_history.append(control_input)
+        self.control_inputs_history = np.vstack((self.control_inputs_history, [control_input]))
 
         # Update quadrotor state
         self.plant.step(self.dt, control_input)
@@ -96,14 +96,16 @@ class QuadrotorSimulator:
         self.t += self.dt
         
         # Record data
-        self.trajectory.append(self.plant.get_position())
-        self.time_history.append(self.t)
-        self.attitude_history.append(self.plant.get_attitude())
-        
+        new_position = self.plant.get_position().reshape(1, -1)
+        self.trajectory = np.vstack((self.trajectory, new_position))
+        self.time_history = np.append(self.time_history, self.t)
+        self.attitude_history = np.vstack((self.attitude_history, [self.plant.get_attitude()]))
+                
         # Calculate and record position error
         current_position = self.plant.get_position()
         error = np.linalg.norm(current_position - self.controller.target_position)
-        self.error_history.append(error)
+        self.error_history = np.append(self.error_history, error)
+        
 
         # Check if simulation is complete
         return self.t >= self.max_time
