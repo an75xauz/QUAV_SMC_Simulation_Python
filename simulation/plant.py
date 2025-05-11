@@ -180,7 +180,11 @@ class QuadrotorPlant:
         )
         
         # Update the state with the integration result
-        self.state = sol.y[:, -1]
+        # 檢查 sol.y 的類型並正確處理它，無論它是列表還是陣列
+        if isinstance(sol.y, list):
+            self.state = np.array([y[-1] for y in sol.y])
+        else:
+            self.state = sol.y[:, -1]
         return self.state
         
     def get_state(self) -> np.ndarray:
