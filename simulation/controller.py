@@ -251,6 +251,7 @@ class QuadrotorSMCController:
         yaw_torque = yaw_torque_eq + yaw_torque_sw
         
         # Ensure control inputs do not contain NaN or Inf values
+        total_thrust = min(total_thrust, 30.0)
         control_out = np.array([roll_torque, pitch_torque, yaw_torque, total_thrust])
         control_out = np.nan_to_num(control_out, nan=0.0, posinf=50.0, neginf=-50.0)
         
