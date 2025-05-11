@@ -8,13 +8,15 @@ class Actor(nn.Module):
     def __init__(self, state_dim, action_dim, max_action, hidden_sizes):
         super(Actor, self).__init__()
         self.l1 = nn.Linear(state_dim, hidden_sizes[0])
+        self.bn1 = nn.LayerNorm(hidden_sizes[0])
         self.l2 = nn.Linear(hidden_sizes[0], hidden_sizes[1])
+        self.bn2 = nn.LayerNorm(hidden_sizes[1])
         self.l3 = nn.Linear(hidden_sizes[1], action_dim)
         self.max_action = max_action #讓最後的輸出不會是只有[-1, 1]
 
     def forward(self, state):
-        x = F.relu(self.l1(state))
-        x = F.relu(self.l2(x))
+        x = F.relu(self.bn1(self.l1(state)))
+        x = F.relu(self.bn2(self.l2(x)))
         x = torch.tanh(self.l3(x))
         return x * self.max_action
 
@@ -31,21 +33,26 @@ class Critic(nn.Module):
         self.l5 = nn.Linear(hidden_sizes[0], hidden_sizes[1])
         self.l6 = nn.Linear(hidden_sizes[1], 1)
 
+        self.bn1 = nn.LayerNorm(hidden_sizes[0])
+        self.bn2 = nn.LayerNorm(hidden_sizes[1])
+        self.bn4 = nn.LayerNorm(hidden_sizes[0])
+        self.bn5 = nn.LayerNorm(hidden_sizes[1])
+
     def forward(self, state, action):
         sa = torch.cat([state, action], 1) # 將兩個張量(tensor) 在第 1 維度上進行串接(concatenate)
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
+        q1 = F.relu(self.bn1(self.l1(sa)))
+        q1 = F.relu(self.bn2(self.l2(q1)))
         q1 = self.l3(q1)
-        q2 = F.relu(self.l4(sa))
-        q2 = F.relu(self.l5(q2))
+        q2 = F.relu(self.bn4(self.l4(sa)))
+        q2 = F.relu(self.bn5(self.l5(q2)))
         q2 = self.l6(q2)
         return q1, q2
 
     def Q1(self, state, action):
         '''更新Actor只需要計算Q1的梯度，完全不需要Q2網路。'''
         sa = torch.cat([state, action], 1)
-        q1 = F.relu(self.l1(sa))
-        q1 = F.relu(self.l2(q1))
+        q1 = F.relu(self.bn1(self.l1(sa)))
+        q1 = F.relu(self.bn2(self.l2(q1)))
         q1 = self.l3(q1)
         return q1
 
@@ -152,7 +159,14 @@ class TD3Agent:
         """Select an action given a state (with optional exploration noise).根據目前的狀態選擇動作，可以加入噪聲來探索"""
         state_tensor = torch.tensor(state.reshape(1, -1), dtype=torch.float32).to(self.device)
         action = self.actor(state_tensor).cpu().data.numpy().flatten()
-
+        if noise == 0.0:
+            self.actor.eval()  # 設為評估模式
+            with torch.no_grad():
+                action = self.actor(state_tensor).cpu().data.numpy().flatten()
+            self.actor.train()  # 恢復訓練模式
+        else:
+            # 訓練時保持訓練模式
+            action = self.actor(state_tensor).cpu().data.numpy().flatten()
         # 追蹤動作值
         if hasattr(self, 'action_values'):
             self.action_values.append(action.copy())
