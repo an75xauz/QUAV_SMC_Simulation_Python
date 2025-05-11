@@ -175,3 +175,135 @@ def plot_loss(agent, save_dir, critic_window=20, actor_window=5):
         plt.close()
     else:
         print("❗ 尚未收集到 loss 資料，無法繪圖")
+def plot_q_values(agent, save_dir):
+    """Plot Q-values with moving average window
+    
+    Args:
+        agent: TD3Agent object containing stored Q-values
+        save_dir: Directory to save the plot
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    # Check if sufficient Q-value data exists
+    if len(agent.q_values) < 10:
+        print("Insufficient Q-value data for plotting")
+        return
+    
+    # Convert to numpy array
+    q1_values = np.array(agent.q_values)
+    
+    # Calculate moving average (window=100)
+    def moving_average(data, window_size=100):
+        if len(data) < window_size:
+            return data
+        
+        weights = np.ones(window_size) / window_size
+        return np.convolve(data, weights, mode='valid')
+    
+    # Apply moving average if data length is sufficient
+    x_vals = np.arange(len(q1_values))
+    window_size = 100
+    
+    if len(q1_values) >= 100:
+        q1_ma = moving_average(q1_values)
+        # Adjust x-axis to match moving average length
+        x_vals_ma = np.arange(len(q1_ma)) + window_size - 1
+    else:
+        q1_ma = q1_values
+        x_vals_ma = x_vals
+    
+    # Create plot
+    plt.figure(figsize=(10, 6))
+    
+    # Plot Q-values with moving average
+    plt.plot(x_vals_ma, q1_ma, color='blue', linewidth=2, label='Q-value (Moving Avg)')
+    
+    # Optional: Plot original Q-values as scatter points
+    plt.scatter(x_vals[::100], q1_values[::100], color='gray', alpha=0.4, s=15, label='Original Q-values (every 100 points)')
+    
+    plt.xlabel('Training Steps')
+    plt.ylabel('Q-value')
+    plt.title('TD3 Q-values During Training (Moving Average, Window=100)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Save plot
+    plt.savefig(f"{save_dir}/q_values.png", dpi=200, bbox_inches='tight')
+    plt.close()
+
+def plot_dual_q_values(agent, save_dir):
+    """Plot individual Q-values of dual Q-networks with moving average window
+    
+    Args:
+        agent: TD3Agent object containing stored Q-values
+        save_dir: Directory to save the plot
+    """
+    import numpy as np
+    import matplotlib.pyplot as plt
+    
+    # Check if sufficient Q-value data exists
+    if not hasattr(agent, 'q1_values') or not hasattr(agent, 'q2_values'):
+        print("Need to add q1_values and q2_values attributes to TD3Agent to record dual Q-network values")
+        return
+    
+    if len(agent.q1_values) < 10 or len(agent.q2_values) < 10:
+        print("Insufficient Q-value data for plotting")
+        return
+    
+    # Convert to numpy arrays
+    q1_values = np.array(agent.q1_values)
+    q2_values = np.array(agent.q2_values)
+    
+    # Ensure consistent lengths
+    min_length = min(len(q1_values), len(q2_values))
+    q1_values = q1_values[:min_length]
+    q2_values = q2_values[:min_length]
+    
+    # Calculate moving average (window=100)
+    def moving_average(data, window_size=100):
+        if len(data) < window_size:
+            return data
+        
+        weights = np.ones(window_size) / window_size
+        return np.convolve(data, weights, mode='valid')
+    
+    window_size = 100
+    
+    # Apply moving average if data length is sufficient
+    if min_length >= window_size:
+        q1_ma = moving_average(q1_values)
+        q2_ma = moving_average(q2_values)
+        # Adjust x-axis to match moving average length
+        x_vals = np.arange(len(q1_ma)) + window_size - 1
+    else:
+        q1_ma = q1_values
+        q2_ma = q2_values
+        x_vals = np.arange(min_length)
+    
+    # Create plot
+    plt.figure(figsize=(12, 7))
+    
+    # Plot Q1 and Q2 values with moving average
+    plt.plot(x_vals, q1_ma, color='blue', linewidth=2, label='Q1 Network (Moving Avg)')
+    plt.plot(x_vals, q2_ma, color='red', linewidth=2, label='Q2 Network (Moving Avg)')
+    
+    # Calculate and plot difference between Q1 and Q2
+    q_diff = np.abs(q1_ma - q2_ma)
+    plt.plot(x_vals, q_diff, color='green', linestyle='--', linewidth=1.5, label='|Q1-Q2| Difference')
+    
+    plt.xlabel('Training Steps')
+    plt.ylabel('Q Values')
+    plt.title('TD3 Dual Q-Network Values (Moving Average, Window=100)')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Add secondary y-axis to highlight Q1-Q2 difference
+    ax2 = plt.gca().twinx()
+    ax2.plot(x_vals, q_diff, color='green', linestyle='--', linewidth=1.5, alpha=0)  # Transparent line, only for secondary y-axis
+    ax2.set_ylabel('|Q1-Q2| Difference', color='green')
+    ax2.tick_params(axis='y', labelcolor='green')
+    
+    # Save plot
+    plt.savefig(f"{save_dir}/dual_q_values.png", dpi=200, bbox_inches='tight')
+    plt.close()

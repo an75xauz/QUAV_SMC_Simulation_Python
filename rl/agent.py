@@ -154,6 +154,8 @@ class TD3Agent:
         self.actor_losses = []
         self.q_values = []
         self.action_values = []
+        self.q1_values = []
+        self.q2_values = []
 
     def select_action(self, state, noise=0.0):
         """Select an action given a state (with optional exploration noise).根據目前的狀態選擇動作，可以加入噪聲來探索"""
@@ -213,6 +215,8 @@ class TD3Agent:
         current_Q1, current_Q2 = self.critic(state, action)
         # 追蹤Q值
         self.q_values.append(current_Q1.mean().item())
+        self.q1_values.append(current_Q1.mean().item())  
+        self.q2_values.append(current_Q2.mean().item())  
 
         # Critic loss
         critic_loss = F.mse_loss(current_Q1, target_Q.detach()) + F.mse_loss(current_Q2, target_Q.detach())

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
 
-from plot_utils import plot_training_metrics, plot_training_results, plot_loss
+from plot_utils import plot_training_metrics, plot_training_results, plot_loss, plot_q_values, plot_dual_q_values
 from rl.register_env import make_env
 from rl.agent import TD3Agent
 from rl.env_UAV import QuadrotorEnv
@@ -124,7 +124,7 @@ def train(
         # 顯示訓練進度
         # print(f"回合 {episode}/{max_episodes}: 獎勵 = {episode_reward:.2f}, 平均獎勵 = {avg_reward:.2f}, 步數 = {episode_steps}")
         print(f"\033[1;33m回合 {episode}/{max_episodes}: 獎勵 = {episode_reward:.2f}, 平均獎勵 = {avg_reward:.2f}, 步數 = {episode_steps}\033[0m")
-        print("----------")
+        print("***----------***")
         # 定期評估智能體性能
         if episode % eval_freq == 0:
             eval_reward = evaluate_agent(env, agent)
@@ -148,6 +148,8 @@ def train(
             # 保存訓練曲線
             plot_training_results(episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir)
             plot_loss(agent, save_dir)
+            plot_q_values(agent, save_dir)
+            plot_dual_q_values(agent, save_dir)
     
     # 保存最終模型
     torch.save(agent.actor.state_dict(), f"{save_dir}/actor_final.pth")
@@ -156,6 +158,8 @@ def train(
     # 繪製訓練曲線
     plot_training_results(episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir)
     plot_loss(agent, save_dir)
+    plot_q_values(agent, save_dir)
+    plot_dual_q_values(agent, save_dir)
     # 關閉環境
     env.close()
 
@@ -189,7 +193,7 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=0, help='隨機種子')
     parser.add_argument('--eval_freq', type=int, default=ECAL_FREQ, help='評估頻率')
     parser.add_argument('--episodes', type=int, default=MAX_EPISODES, help='訓練回合數')
-    parser.add_argument('--save_dir', type=str, default='logs', help='模型保存目錄')
+    parser.add_argument('--save_dir', type=str, default='logs_2', help='模型保存目錄')
     
     args = parser.parse_args()
     
