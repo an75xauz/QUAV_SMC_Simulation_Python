@@ -190,7 +190,7 @@ class QuadrotorEnv(gym.Env):
         # 控制參數變化太大的懲罰（鼓勵平穩變化）
         param_change_penalty = 0.0
         if hasattr(self, 'prev_action'):
-            param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.01
+            param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.005
         self.prev_action = action.copy()
         
         # 扣除懲罰
@@ -202,10 +202,10 @@ class QuadrotorEnv(gym.Env):
             self.reached_target = True
         # 飛出範圍的懲罰
         if np.any(np.abs(position) > 15.0):
-            reward -= 100.0
+            reward -= 50.0
         # 墜毀的大懲罰
         if position[2] < 0.0:
-            reward -= 100.0
+            reward -= 50.0
             
         return np.clip(reward, -200.0, 200.0)
     
