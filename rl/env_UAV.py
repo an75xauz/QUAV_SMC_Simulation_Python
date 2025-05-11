@@ -92,7 +92,8 @@ class QuadrotorEnv(gym.Env):
                 np.random.uniform(-3.0, 3.0),
                 np.random.uniform(-3.0, 3.0),
                 np.random.uniform(0.0, 4.0)  # 確保高度為正
-            ], dtype=np.float32)        
+            ], dtype=np.float32)
+        print("----------")
         print(f"target position:{self.target_position}")
         # 設置控制器目標
         self.controller.set_target_position(self.target_position)
@@ -236,7 +237,7 @@ class QuadrotorEnv(gym.Env):
         # 成功條件：達到目標並在那裡停留一段時間
         if distance < 0.2 and self.reached_target:
             if self.step_count > 50:
-                print("\033[34m 成功!!! \033[0m")
+                print("\033[33m 成功!!! \033[0m")
                 return True
         
         return False
