@@ -3,6 +3,39 @@ import numpy as np
 from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
 from gym_pybullet_drones.utils.Logger import Logger
 
+class DroneQuadrotorPlant:
+    """為滑模控制器提供四旋翼植物模型接口"""
+    def __init__(self, drone_model):
+        # 根據不同的drone_model可以設定不同的參數
+        # 預設使用Crazyflie 2.x參數
+        self.m = 0.027  # kg, Crazyflie 2.x 重量
+        self.g = 9.81   # m/s^2
+        # 對角慣性矩陣 [Ixx, Iyy, Izz]
+        self.J = np.array([1.4e-5, 1.4e-5, 2.17e-5])  # 慣性矩陣
+        self.state = np.zeros(12)  # [x, y, z, vx, vy, vz, phi, theta, psi, p, q, r]
+        
+    def get_state(self):
+        """返回無人機狀態"""
+        return self.state
+        
+    def update_state(self, obs):
+        """從PyBullet觀測更新狀態
+        
+        參數:
+            obs: PyBullet的觀測值，包含位置、速度、姿態和角速度
+            
+        返回:
+            更新後的狀態
+        """
+        pos = obs[0:3]         # 位置 [x, y, z]
+        vel = obs[3:6]         # 速度 [vx, vy, vz]
+        rpy = obs[6:9]         # 姿態角 [phi, theta, psi]
+        ang_vel = obs[10:13]   # 角速度 [p, q, r]
+        
+        # 更新狀態向量
+        self.state = np.concatenate([pos, vel, rpy, ang_vel])
+        return self.state
+
 def create_env(drone_model, num_drones, initial_xyzs, initial_rpys, physics, 
               simulation_freq_hz, control_freq_hz, gui, record_video, 
               obstacles, user_debug_gui):

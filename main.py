@@ -1,3 +1,11 @@
+"""單一無人機滑模控制模擬程式的主入口。
+
+範例
+-------
+在終端中運行：
+
+    $ python main.py --initial_x 0 --initial_y 0 --initial_z 0.1 --target_x 1 --target_y 1 --target_z 0.5
+"""
 import os
 import argparse
 import numpy as np
@@ -7,14 +15,15 @@ from gym_pybullet_drones.utils.utils import str2bool
 
 # 導入自定義模組
 import config
-from controller import create_controller
-from env import create_env, create_logger
+from controller import QuadrotorSMCController, set_smc_parameters
+from env import create_env, create_logger, DroneQuadrotorPlant
 from run_sim import run_simulation
 
 def parse_args():
     """解析命令行參數"""
-    parser = argparse.ArgumentParser(description='單一無人機PID控制模擬程式')
+    parser = argparse.ArgumentParser(description='單一無人機滑模控制模擬程式')
     
+    # 基本設置參數
     parser.add_argument('--drone', default=config.DEFAULT_DRONE, type=DroneModel,
                        help='無人機型號 (默認: CF2X)', metavar='', choices=DroneModel)
     parser.add_argument('--physics', default=config.DEFAULT_PHYSICS, type=Physics,
@@ -40,7 +49,7 @@ def parse_args():
     parser.add_argument('--colab', default=config.DEFAULT_COLAB, type=bool,
                        help='是否由筆記本運行示例 (默認: "False")', metavar='')
     
-    # 添加初始位置和目標位置的命令行參數
+    # 位置參數
     parser.add_argument('--initial_x', default=config.DEFAULT_INITIAL_X, type=float,
                        help='無人機初始X座標 (默認: 0.0)', metavar='')
     parser.add_argument('--initial_y', default=config.DEFAULT_INITIAL_Y, type=float,
@@ -53,6 +62,30 @@ def parse_args():
                        help='無人機目標Y座標 (默認: 1.0)', metavar='')
     parser.add_argument('--target_z', default=config.DEFAULT_TARGET_Z, type=float,
                        help='無人機目標Z座標 (默認: 0.5)', metavar='')
+    
+    # # 滑模控制器參數
+    # parser.add_argument('--lambda_pos', default=0.5, type=float,
+    #                    help='位置控制滑動面斜率 (默認: 0.5)', metavar='')
+    # parser.add_argument('--eta_pos', default=0.5, type=float,
+    #                    help='位置控制增益 (默認: 0.5)', metavar='')
+    # parser.add_argument('--lambda_alt', default=2.3, type=float,
+    #                    help='高度控制滑動面斜率 (默認: 2.3)', metavar='')
+    # parser.add_argument('--eta_alt', default=25.0, type=float,
+    #                    help='高度控制增益 (默認: 25.0)', metavar='')
+    # parser.add_argument('--lambda_att', default=30, type=float,
+    #                    help='姿態控制滑動面斜率 (默認: 30)', metavar='')
+    # parser.add_argument('--eta_att', default=25, type=float,
+    #                    help='姿態控制增益 (默認: 25)', metavar='')
+    # parser.add_argument('--lambda_att_yaw', default=30, type=float,
+    #                    help='偏航控制滑動面斜率 (默認: 30)', metavar='')
+    # parser.add_argument('--eta_att_yaw', default=9.0, type=float,
+    #                    help='偏航控制增益 (默認: 9.0)', metavar='')
+    # parser.add_argument('--k_smooth', default=0.5, type=float,
+    #                    help='控制平滑因子 (默認: 0.5)', metavar='')
+    # parser.add_argument('--k_smooth_pos', default=0.5, type=float,
+    #                    help='位置控制平滑因子 (默認: 0.5)', metavar='')
+    # parser.add_argument('--max_angle', default=None, type=float,
+    #                    help='最大傾角(度), 若未指定則使用默認值', metavar='')
     
     return parser.parse_args()
 
@@ -84,9 +117,13 @@ def main():
         user_debug_gui=args.user_debug_gui
     )
     
-    # 創建控制器
-    ctrl = create_controller(args.drone)
+    # 創建模型
+    plant = DroneQuadrotorPlant(args.drone)
     
+    # 創建滑模控制器
+    controller = QuadrotorSMCController(plant)
+    
+
     # 創建日誌記錄器
     logger = create_logger(
         control_freq_hz=args.control_freq_hz,
@@ -98,7 +135,8 @@ def main():
     # 運行模擬
     logger = run_simulation(
         env=env,
-        ctrl=ctrl,
+        plant=plant,
+        controller=controller,
         logger=logger,
         initial_pos=initial_pos,
         initial_rpy=initial_rpys,

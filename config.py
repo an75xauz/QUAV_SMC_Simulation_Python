@@ -23,7 +23,20 @@ DEFAULT_COLAB = False  # 默認非Colab環境運行
 # 位置設定
 DEFAULT_INITIAL_X = 0.0
 DEFAULT_INITIAL_Y = 0.0
-DEFAULT_INITIAL_Z = 0.1
-DEFAULT_TARGET_X = 1.0
-DEFAULT_TARGET_Y = 1.0
-DEFAULT_TARGET_Z = 0.5
+DEFAULT_INITIAL_Z = 0.5
+DEFAULT_TARGET_X = 0.0
+DEFAULT_TARGET_Y = 0.0
+DEFAULT_TARGET_Z = 2
+
+# 滑模控制器參數
+SMC_LAMBDA_POS = 0.5      # 位置控制滑動面斜率
+SMC_ETA_POS = 0.5         # 位置控制增益
+SMC_LAMBDA_ALT = 2.3      # 高度控制滑動面斜率
+SMC_ETA_ALT = 25.0        # 高度控制增益
+SMC_LAMBDA_ATT = 30       # 姿態控制滑動面斜率
+SMC_ETA_ATT = 25          # 姿態控制增益
+SMC_LAMBDA_ATT_YAW = 30   # 偏航控制滑動面斜率
+SMC_ETA_ATT_YAW = 9.0     # 偏航控制增益
+SMC_K_SMOOTH = 0.5        # 平滑因子
+SMC_K_SMOOTH_POS = 0.5    # 位置控制平滑因子
+SMC_MAX_ANGLE = 30 * 3.14159/180  # 最大傾角(弧度)
