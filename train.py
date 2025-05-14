@@ -59,8 +59,8 @@ def train(
     
     # 設置默認SMC參數，用於初始探索
     default_params = np.array([
-        2.8,   # lambda_alt
-        20.0,  # eta_alt
+        # 2.8,   # lambda_alt
+        # 20.0,  # eta_alt
         30.0,  # lambda_att
         9.0,   # eta_att
         0.5,   # lambda_pos
@@ -75,6 +75,10 @@ def train(
     
     # 主訓練循環
     for episode in tqdm(range(1, max_episodes + 1), desc="訓練進度"):
+        # 當達到特定 episode 時啟用隨機目標
+        if episode == 500:  # 例如第500個回合開始隨機目標
+            env.random_target = True
+            print("啟用隨機目標位置訓練")
         state = env.reset()
         episode_reward = 0
         episode_steps = 0
@@ -126,7 +130,7 @@ def train(
         print(f"\033[1;33m回合 {episode}/{max_episodes}: 獎勵 = {episode_reward:.2f}, 平均獎勵 = {avg_reward:.2f}, 步數 = {episode_steps}\033[0m")
         print("***----------***")
         # 定期評估智能體性能
-        if episode % eval_freq == 0:
+        if episode % eval_freq == 0 :
             eval_reward = evaluate_agent(env, agent)
             eval_rewards.append(eval_reward)
             print(f"評估獎勵: {eval_reward:.2f}")
@@ -172,13 +176,16 @@ def evaluate_agent(env, agent, n_episodes=5):
         state = env.reset()
         episode_reward = 0
         done = False
-        
-        while not done:
+        step_count = 0
+        print(f"eval_episiode:{_}")
+        while not done and step_count<MAX_STEPS:
             # 使用確定性策略（無探索噪聲）
             action = agent.select_action(np.array(state), noise=0.0)
+            action = np.clip(action, env.action_space.low, env.action_space.high)
             next_state, reward, done, _ = env.step(action)
             episode_reward += reward
             state = next_state
+            step_count +=1
         
         rewards.append(episode_reward)
     
