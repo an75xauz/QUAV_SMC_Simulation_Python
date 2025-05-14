@@ -152,7 +152,7 @@ class QuadrotorPlant:
             phi_dot, theta_dot, psi_dot,   # Attitude derivatives
             p_dot, q_dot, r_dot            # Angular velocity derivatives
         ])
-        
+        state_dot = np.nan_to_num(state_dot, nan=0.0, posinf=1e3, neginf=-1e3)
         return state_dot
         
     def step(self, dt: float, control_input: Optional[np.ndarray] = None) -> np.ndarray:
@@ -169,16 +169,18 @@ class QuadrotorPlant:
         """
         if control_input is not None:
             self.set_control_input(control_input)
-            
+
         # Use RK45 numerical integration to solve the ODEs
         sol = solve_ivp(
             fun=lambda t, y: self.dynamics(t, y, self.control_input),
             t_span=[0, dt],
             y0=self.state,
             method='RK45',
-            t_eval=[dt]
+            t_eval=[dt],
+            rtol=1e-6,   # 調整容忍誤差（relative tolerance）
+            atol=1e-9    # 調整絕對容忍誤差（absolute tolerance）
         )
-        
+
         # Update the state with the integration result
         # 檢查 sol.y 的類型並正確處理它，無論它是列表還是陣列
         if isinstance(sol.y, list):
