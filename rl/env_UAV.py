@@ -39,8 +39,8 @@ class QuadrotorEnv(gym.Env):
         # 各參數的範圍需要根據實際情況調整
         # [lambda_alt, eta_alt, lambda_att, eta_att, lambda_pos, eta_pos]
         self.action_space = spaces.Box(
-            low=np.array([0.1, 1.0, 1.0, 1.0, 0.1, 0.1]),  # 最小值
-            high=np.array([10.0, 40.0, 40.0, 40.0, 1, 1]),  # 最大值
+            low=np.array([ 1.0, 1.0, 0.1, 0.1]),  # 最小值
+            high=np.array([ 40.0, 40.0, 1, 1]),  # 最大值
             dtype=np.float32
         )
         
@@ -68,6 +68,7 @@ class QuadrotorEnv(gym.Env):
         
         # 用於追蹤任務完成情況
         self.reached_target = False
+        self.step_sucess = 0
         
         # 重置環境
         self.reset()
@@ -77,7 +78,7 @@ class QuadrotorEnv(gym.Env):
         # 重置步數計數器和狀態
         self.step_count = 0
         self.reached_target = False
-        
+        self.step_sucess = 0
         # 初始狀態
         initial_state = np.zeros(12)
         initial_state[:3] = self.initial_position
@@ -94,6 +95,7 @@ class QuadrotorEnv(gym.Env):
                 np.random.uniform(0.0, 4.0)  # 確保高度為正
             ], dtype=np.float32)
         print("----------")
+        print(f"initial position:{self.initial_position}")
         print(f"target position:{self.target_position}")
         # 設置控制器目標
         self.controller.set_target_position(self.target_position)
@@ -111,12 +113,12 @@ class QuadrotorEnv(gym.Env):
             observation, reward, done, info 的元組
         """
         # 將動作應用到控制器參數
-        self.controller.lambda_alt = action[0]
-        self.controller.eta_alt = action[1]
-        self.controller.lambda_att = action[2]
-        self.controller.eta_att = action[3]
-        self.controller.lambda_pos = action[4]
-        self.controller.eta_pos = action[5]
+        # self.controller.lambda_alt = action[0]
+        # self.controller.eta_alt = action[1]
+        self.controller.lambda_att = action[0]
+        self.controller.eta_att = action[1]
+        self.controller.lambda_pos = action[2]
+        self.controller.eta_pos = action[3]
         
         # 使用控制器計算控制輸入
         control_input = self.controller.update(self.dt)
@@ -168,46 +170,50 @@ class QuadrotorEnv(gym.Env):
         
         # 基於距離的基本獎勵
         normalized_distance = distance / np.linalg.norm(self.initial_position - self.target_position)
-        reward = -normalized_distance  # 離目標越遠，負獎勵越大
+        reward = -0.1*normalized_distance**2  # 離目標越遠，負獎勵越大
         
         # 接近目標的額外獎勵
-        prev_normalized_distance = prev_distance / np.linalg.norm(self.initial_position - self.target_position)
-        improvement = prev_normalized_distance - normalized_distance
-        reward += improvement * 20.0
+        # prev_normalized_distance = prev_distance / np.linalg.norm(self.initial_position - self.target_position)
+        # improvement = prev_normalized_distance - normalized_distance
+        # reward += improvement * 0.5
 
-        if distance < 0.2:
-            reward += 2.0  # 正獎勵
+        # if distance < 0.2:
+        #     reward += 0.1  # 正獎勵
         
         # 姿態角偏差懲罰
-        orientation_penalty = np.sum(np.square(angles[:2])) * 0.05
+        # orientation_penalty = np.sum(np.square(angles[:2])) * 0.05
         
-        # 速度懲罰（希望平穩運動）
-        velocity_penalty = np.sum(np.square(velocity)) * 0.01
+        # # 速度懲罰（希望平穩運動）
+        # velocity_penalty = np.sum(np.square(velocity)) * 0.01
         
-        # 角速度懲罰（希望穩定姿態）
-        ang_vel_penalty = np.sum(np.square(ang_vel)) * 0.01
+        # # 角速度懲罰（希望穩定姿態）
+        # ang_vel_penalty = np.sum(np.square(ang_vel)) * 0.01
         
         # 控制參數變化太大的懲罰（鼓勵平穩變化）
-        param_change_penalty = 0.0
-        if hasattr(self, 'prev_action'):
-            param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.005
-        self.prev_action = action.copy()
+        # param_change_penalty = 0.0
+        # if hasattr(self, 'prev_action'):
+        #     param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.005
+        # self.prev_action = action.copy()
         
         # 扣除懲罰
-        reward -= (orientation_penalty + velocity_penalty + ang_vel_penalty + param_change_penalty)*0.1
+        # reward -= (orientation_penalty + velocity_penalty + ang_vel_penalty)*0.1
         
         # 達到目標的大獎勵
         if distance < 0.2 and not self.reached_target:
-            reward += 10.0
+            reward += 2.0
+            print("\t\treach!")
             self.reached_target = True
-        # 飛出範圍的懲罰
-        if np.any(np.abs(position) > 15.0):
-            reward -= 50.0
-        # 墜毀的大懲罰
-        if position[2] < 0.0:
-            reward -= 50.0
+        elif distance < 0.2 and self.reached_target:
+            self.step_sucess += 1
+            # reward += 0.1
+        # # 飛出範圍的懲罰
+        # if np.any(np.abs(position) > 15.0):
+        #     reward -= 0.1
+        # # 墜毀的大懲罰
+        # if position[2] < 0.0:
+        #     reward -= 0.1
             
-        return np.clip(reward, -200.0, 200.0)
+        return np.clip(reward, -2.0, 2.0)
     
     def _is_done(self, state):
         """檢查回合是否結束"""
@@ -220,23 +226,24 @@ class QuadrotorEnv(gym.Env):
         
         # 檢查是否達到最大步數
         if self.step_count >= self.max_steps:
-            print("\t達到最大步數")
+            print("\t \033[34m dead :(\033[0m")
             return True
         
-        # 檢查四旋翼機是否飛出範圍
-        if np.any(np.abs(position) > 15.0):
-            print("\t飛出範圍")
-            return True
+        # # 檢查四旋翼機是否飛出範圍
+        # if np.any(np.abs(position) > 15.0):
+        #     print("\t飛出範圍")
+        #     return True
         
-        # 檢查是否墜毀
-        if position[2] < 0.0:
-            print("\t墜毀")
-            return True
+        # # 檢查是否墜毀
+        # if position[2] < 0.0:
+        #     print("\t墜毀")
+        #     return True
         
         
         # 成功條件：達到目標並在那裡停留一段時間
         if distance < 0.2 and self.reached_target:
-            if self.step_count > 50:
+            self.step_sucess += 1
+            if self.step_sucess > 30:
                 print("\033[33m 成功!!! \033[0m")
                 return True
         
