@@ -9,7 +9,7 @@ import argparse
 from utils.log_utils import TrainingLogger
 import atexit
 
-from plot_utils import plot_training_metrics, plot_training_results, plot_loss, plot_q_values, plot_dual_q_values
+from utils.plot_utils import plot_training_metrics, plot_training_results, plot_loss, plot_q_values, plot_dual_q_values
 from rl.register_env import make_env
 from rl.agent import TD3Agent
 from rl.env_UAV import QuadrotorEnv
