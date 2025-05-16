@@ -18,14 +18,14 @@ TAU = 0.005
 # TD3-specific noise parameters
 POLICY_NOISE = 0.2
 NOISE_CLIP = 0.5
-POLICY_DELAY = 3
+POLICY_DELAY = 2
 
 # Learning rate for both Actor and Critic optimizers
-LR = 5e-5
+LR = 1e-4
 
 # Training parameters
-MAX_EPISODES = 2500         # Total training episodes
-MAX_STEPS = 500           # Maximum steps per episode
+MAX_EPISODES = 5000         # Total training episodes
+MAX_STEPS = 250           # Maximum steps per episode
 EXPL_NOISE = 0.1          # Std of Gaussian exploration noise added to actions
 SAVE_INTERVAL = 50        # Episodes between saving model checkpoints
 ECAL_FREQ = 10
