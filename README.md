@@ -1,150 +1,116 @@
-# Quadrotor UAV Control Simulation
+# Quadrotor UAV Reinforcement Learning Control Project
 
-A comprehensive quadrotor UAV simulation and control system featuring Sliding Mode Control (SMC) for robust flight performance with real-time visualization.
+This project implements a simulation environment for a Quadrotor UAV and uses the TD3 (Twin Delayed Deep Deterministic Policy Gradient) reinforcement learning algorithm to optimize parameters of a Sliding Mode Controller (SMC). Through reinforcement learning, the system can automatically find the optimal control parameters, enabling the quadrotor to reach target positions stably and efficiently.
 
-## Overview
+## Prerequisites
 
-This project implements a complete simulation environment for a quadrotor UAV (Unmanned Aerial Vehicle), including rigid body dynamics, 3D visualization, and a robust Sliding Mode Controller for position and attitude control. The system allows users to simulate quadrotor flight trajectories, analyze control performance, and visualize results in real-time.
+To run this project, your system should meet the following requirements:
 
-## System Architecture
+- Python 3.6 or higher
+- CUDA support (optional but recommended for accelerated training)
 
-The system is designed with a modular architecture consisting of four main components:
+## Installation Environment
 
-1. **Plant Model** (`plant.py`): Implements the dynamic model of the quadrotor UAV, including rigid body dynamics and aerodynamic effects
-2. **Controller** (`controller.py`): Implements the Sliding Mode Control algorithm for robust position and attitude control
-3. **Visualization** (`sim.py`): Handles simulation visualization, including real-time animation and static result plotting
-4. **Main Program** (`main.py`): Serves as the entry point, handling parameter configuration and initializing the simulation environment
-
-## Installation
-
-### Prerequisites
-
-- Python 3.8 or higher
-- NumPy
-- SciPy
-- Matplotlib
-
-### Setup
+1. Install required dependencies:
 
 ```bash
-# Clone the repository
-git clone https://github.com/an75xauz/QUAV_SMC_Simulation_Python.git
-cd quadrotor-smc-simulation
-
-# Install required packages
-pip install numpy scipy matplotlib
+pip install -r requirements.txt
 ```
 
-## Usage
+## Project Structure
 
-Run the simulation with default parameters:
+The project consists of the following main components:
+
+- `simulation/`: Physical model and simulation environment for the quadrotor
+  - `plant.py`: Quadrotor physical model
+  - `controller.py`: Sliding Mode Controller (SMC)
+  - `sim.py`: Simulation and visualization tools
+
+- `rl/`: Reinforcement learning modules
+  - `agent.py`: TD3 algorithm implementation
+  - `env_UAV.py`: Reinforcement learning environment
+  - `config.py`: Training parameter configuration
+  - `register_env.py`: Environment registration utility
+
+- `utils/`: Utility functions
+  - `plot_utils.py`: Plotting tools
+  - `log_utils.py`: Logging utilities
+
+- Main execution files:
+  - `train.py`: Train the reinforcement learning model
+  - `test_model_17dim.py` & `test_model_16dim.py`: Test trained models
+  - `main.py`: Run simulation with standard controller
+
+## Usage Instructions
+
+### 1. Training the Model
+
+Use the following command to start training the reinforcement learning model:
 
 ```bash
-python main.py
+python train.py --initial 0 0 0 --target 1 1 2 --episodes 5000 --save_dir checkpoints
 ```
 
-Specify custom simulation parameters:
+Parameter descriptions:
+- `--initial`: Initial position [x y z]
+- `--target`: Target position [x y z]
+- `--episodes`: Number of training episodes
+- `--save_dir`: Directory to save models and logs
+
+During training, models will be saved to the specified directory periodically, and training curve plots will be generated.
+
+### 2. Testing the Model
+
+Use the following command to test the trained model:
 
 ```bash
-python main.py --initial 0 0 1 --target 3 2 4 --time 15 --dt 0.02 --initial_attitude 0.1 0.1 0
+python test_model_17dim.py --initial 0 0 0 --target 1 1 2 --model_dir model_17dim --actor_file best_actor.pth
 ```
 
-Generate static plots instead of animation:
+Parameter descriptions:
+- `--initial`: Initial position [x y z]
+- `--target`: Target position [x y z]
+- `--time`: Simulation duration (seconds)
+- `--dt`: Time step (seconds)
+- `--model_dir`: Model directory
+- `--actor_file`: Actor model filename
+- `--plot`: If added, only generates static plots instead of showing animation
+
+### 3. Running Standard SMC Controller Simulation
+
+Use the following command to run a simulation with the standard controller:
 
 ```bash
-python main.py --plot
+python main.py --initial 0 0 0 --target 1 1 2 --time 10 --dt 0.05
 ```
 
-## Parameter Adjustment
+Parameter descriptions are the same as for testing the model.
 
-### Command Line Parameters
+## Training Parameters Explanation
 
-The following parameters can be adjusted via command line arguments in `main.py`:
+You can adjust the following training parameters in `rl/config.py`:
 
-| Parameter | Description | Default Value |
-|-----------|-------------|---------------|
-| `--initial` | Initial position [x y z] in meters | [0, 0, 0] |
-| `--target` | Target position [x y z] in meters | [1, 1, 2] |
-| `--time` | Simulation duration in seconds | 10.0 |
-| `--dt` | Simulation time step in seconds | 0.05 |
-| `--initial_attitude` | Initial attitude [roll pitch yaw] in radians | [0, 0.1, 0.1] |
-| `--plot` | Generate static plots only (no animation) | False |
+- `MAX_EPISODES`: Maximum number of training episodes
+- `MAX_STEPS`: Maximum steps per episode
+- `BUFFER_SIZE`: Experience replay buffer size
+- `BATCH_SIZE`: Batch size
+- `GAMMA`: Discount factor
+- `TAU`: Target network soft update rate
+- `POLICY_NOISE`: Policy noise magnitude
+- `NOISE_CLIP`: Noise clipping range
+- `POLICY_DELAY`: Policy delay update steps
+- `LR`: Learning rate
 
-### Controller Parameters
+## Model Architecture
 
-Controller parameters can be modified in `controller.py` within the `QuadrotorSMCController` class:
+- Actor network: Hidden layers of size 256-256, using ReLU activation functions and LayerNorm normalization
+- Critic network: Dual Q-network structure, each Q-network having hidden layers of size 256-256
 
-```python
-# Height control parameters
-self.lambda_alt = 2.8    # Altitude sliding surface slope
-self.eta_alt = 20.0      # Altitude control gain
+## Results Visualization
 
-# Attitude control parameters
-self.lambda_att = 30.0   # Attitude sliding surface slope
-self.eta_att = 9.0       # Attitude control gain
+When testing the model, the system generates an animation or static plots including:
 
-# Position control parameters
-self.lambda_pos = 0.5    # Position sliding surface slope
-self.eta_pos = 0.5       # Position control gain
-
-# Smoothing factors
-self.k_smooth = 0.5      # Smoothing factor for tanh function
-self.k_smooth_pos = 0.5  # Position control smoothing factor
-
-# Angle limitation (rad)
-self.max_angle = 30 * np.pi/180  # 30 degrees in radians
-```
-
-### Plant Parameters
-
-Physical parameters of the quadrotor can be adjusted in `plant.py` within the `QuadrotorPlant` class:
-
-```python
-# Physical parameters
-self.m = 1.0         # Mass (kg)
-self.g = 9.8         # Gravitational acceleration (m/s²)
-self.l = 0.2         # Arm length (m)
-
-# Moments of inertia (kg·m²)
-self.Ix = 0.0211     # Around x-axis
-self.Iy = 0.0219     # Around y-axis
-self.Iz = 0.0366     # Around z-axis
-
-# Aerodynamic coefficients
-self.kf = 2e-6       # Propeller lift coefficient
-self.km = 2.1e-7     # Propeller torque coefficient
-self.kd = 0.13       # Linear drag coefficient
-self.kd_ang = 0.15   # Angular drag coefficient
-```
-
-### Visualization Parameters
-
-Visualization settings can be modified in `sim.py` within the `QuadrotorSimulator` class:
-
-```python
-# To modify the figure size:
-self.fig = plt.figure(figsize=(13, 8))
-
-# To adjust line styles and colors:
-# Trajectory path
-self.trajectory_plot = self.ax.plot(
-    [], [], [], '--', color='orange', lw=1, alpha=0.8
-)[0]
-
-# To change the state text annotation position:
-self.ax_attitude_text_annotation = self.ax_attitude.text(
-    0.4, 0.85, '',
-    ha='center', va='center',
-    fontsize=12, color='black',
-    transform=self.fig.transFigure
-)
-```
-
-## Visualization Features
-
-The simulation provides two visualization modes:
-
-1. **Real-time Animation**: Shows the quadrotor movement, trajectory, and control states in real-time
-2. **Static Plots**: Generates comprehensive plots of trajectory, position, attitude, and control inputs
-
-The 3D visualization represents the quadrotor as a central body with four arms extending to motors, with the trajectory shown as an orange dashed line.
+1. 3D trajectory of the quadrotor
+2. Attitude angles (roll, pitch, yaw) over time
+3. Position (x, y, z) over time
+4. Control torques and total thrust over time
