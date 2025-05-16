@@ -6,6 +6,8 @@ matplotlib.use('Agg')  # 使用非互動式後端，不會顯示視窗
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import argparse
+from utils.log_utils import TrainingLogger
+import atexit
 
 from plot_utils import plot_training_metrics, plot_training_results, plot_loss, plot_q_values, plot_dual_q_values
 from rl.register_env import make_env
@@ -19,7 +21,8 @@ def train(
     seed=0,
     eval_freq=ECAL_FREQ, #每()eqisode檢查性能
     max_episodes=MAX_EPISODES,
-    save_dir="checkpoints"
+    save_dir="checkpoints",
+    save_log_freq=50
 ):
     """TD3強化學習訓練入口函數"""
     # 設置隨機種子
@@ -37,8 +40,8 @@ def train(
     env = make_env(initial_position=initial_position, target_position=target_position)
     
     # 提取環境資訊
-    state_dim = env.observation_space.shape[0]  # 12維狀態
-    action_dim = env.action_space.shape[0]      # 6維動作 (SMC參數)
+    state_dim = env.observation_space.shape[0]  #17
+    action_dim = env.action_space.shape[0]      # 4
     max_action = env.action_space.high          # 各參數的最大值
     
     # 初始化智能體
@@ -57,6 +60,8 @@ def train(
         buffer_size=BUFFER_SIZE
     )
     
+    logger = TrainingLogger(save_dir=save_dir, save_frequency=save_log_freq)
+    atexit.register(logger.force_save)
     # 設置默認SMC參數，用於初始探索
     default_params = np.array([
         # 2.8,   # lambda_alt
@@ -75,10 +80,7 @@ def train(
     
     # 主訓練循環
     for episode in tqdm(range(1, max_episodes + 1), desc="訓練進度"):
-        # 當達到特定 episode 時啟用隨機目標
-        if episode == 500:  # 例如第500個回合開始隨機目標
-            env.random_target = True
-            print("啟用隨機目標位置訓練")
+
         state = env.reset()
         episode_reward = 0
         episode_steps = 0
@@ -129,12 +131,23 @@ def train(
         # print(f"回合 {episode}/{max_episodes}: 獎勵 = {episode_reward:.2f}, 平均獎勵 = {avg_reward:.2f}, 步數 = {episode_steps}")
         print(f"\033[1;33m回合 {episode}/{max_episodes}: 獎勵 = {episode_reward:.2f}, 平均獎勵 = {avg_reward:.2f}, 步數 = {episode_steps}\033[0m")
         print("***----------***")
+
+        # Log episode data
+        logger.log_episode(episode, episode_reward, avg_reward, episode_steps, info)
+        
+        # Log last control parameters
+        if episode_actions:
+            logger.log_action(episode, episode_steps, episode_actions[-1])
+        
+        # Log agent's Q values and losses
+        logger.log_agent_metrics(agent.total_it, agent)
+
         # 定期評估智能體性能
         if episode % eval_freq == 0 :
-            eval_reward = evaluate_agent(env, agent)
+            eval_reward = evaluate_agent(env, agent, logger)
             eval_rewards.append(eval_reward)
             print(f"評估獎勵: {eval_reward:.2f}")
-
+            logger.log_evaluation(episode, eval_reward)
             plot_training_metrics(agent, episode_rewards, avg_rewards, eval_rewards, eval_freq, save_dir)
 
             # 保存最佳模型
@@ -165,10 +178,12 @@ def train(
     plot_q_values(agent, save_dir)
     plot_dual_q_values(agent, save_dir)
     # 關閉環境
+    print("訓練完成。儲存最終日誌...")
+    logger.save_to_csv()
     env.close()
 
 
-def evaluate_agent(env, agent, n_episodes=5):
+def evaluate_agent(env, agent, logger=None, n_episodes=5):
     """評估智能體在環境中的性能"""
     rewards = []
     
@@ -186,7 +201,10 @@ def evaluate_agent(env, agent, n_episodes=5):
             episode_reward += reward
             state = next_state
             step_count +=1
-        
+            if logger:
+                position = next_state[:3] if len(next_state) >= 3 else next_state
+                target_position = env.target_position if hasattr(env, 'target_position') else np.zeros(3)
+                logger.log_trajectory(_, step_count, position, target_position)
         rewards.append(episode_reward)
     
     return np.mean(rewards)
@@ -194,13 +212,14 @@ def evaluate_agent(env, agent, n_episodes=5):
 
 if __name__ == "__main__":
     # 命令行參數解析
-    parser = argparse.ArgumentParser(description='TD3四旋翼機訓練程式')
-    parser.add_argument('--initial', type=float, nargs=3, default=[0, 0, 0], help='初始位置[x, y, z]')
-    parser.add_argument('--target', type=float, nargs=3, default=[1, 1, 2], help='目標位置[x, y, z]')
-    parser.add_argument('--seed', type=int, default=0, help='隨機種子')
-    parser.add_argument('--eval_freq', type=int, default=ECAL_FREQ, help='評估頻率')
-    parser.add_argument('--episodes', type=int, default=MAX_EPISODES, help='訓練回合數')
-    parser.add_argument('--save_dir', type=str, default='logs_2', help='模型保存目錄')
+    parser = argparse.ArgumentParser(description='TD3 Quadrotor Training')
+    parser.add_argument('--initial', type=float, nargs=3, default=[0, 0, 0], help='Initial position [x, y, z]')
+    parser.add_argument('--target', type=float, nargs=3, default=[1, 1, 2], help='Target position [x, y, z]')
+    parser.add_argument('--seed', type=int, default=0, help='Random seed')
+    parser.add_argument('--eval_freq', type=int, default=ECAL_FREQ, help='Evaluation frequency')
+    parser.add_argument('--episodes', type=int, default=MAX_EPISODES, help='Number of training episodes')
+    parser.add_argument('--save_dir', type=str, default='checkpoints', help='Directory to save models and logs')
+    parser.add_argument('--save_log_freq', type=int, default=50, help='Frequency to save log files (in episodes)')
     
     args = parser.parse_args()
     
@@ -211,5 +230,6 @@ if __name__ == "__main__":
         seed=args.seed,
         eval_freq=args.eval_freq,
         max_episodes=args.episodes,
-        save_dir=args.save_dir
+        save_dir=args.save_dir,
+        save_log_freq=args.save_log_freq
     )
