@@ -37,31 +37,39 @@ class QuadrotorEnv(gym.Env):
         
         # 定義動作空間 (SMC控制器參數)
         # 各參數的範圍需要根據實際情況調整
-        # [lambda_alt, eta_alt, lambda_att, eta_att, lambda_pos, eta_pos]
+        # [lambda_att, eta_att, lambda_pos, eta_pos]
         self.action_space = spaces.Box(
             low=np.array([ 1.0, 1.0, 0.1, 0.1]),  # 最小值
             high=np.array([ 40.0, 40.0, 1, 1]),  # 最大值
             dtype=np.float32
         )
         
-        # 定義觀測空間 (狀態: x, y, z, vx, vy, vz, phi, theta, psi, p, q, r)
+        # 定義觀測空間 (狀態: x, y, z, vx, vy, vz, phi, theta, psi, p, q, r, 
+    #             控制器參數: lambda_att, eta_att, lambda_pos, eta_pos,
+    #             normalized_distance)
         max_pos = 10.0
         max_vel = 5.0
         max_angle = np.pi
         max_ang_vel = 5.0
+        max_lambda = 40.0
+        max_eta = 40.0
         
         self.observation_space = spaces.Box(
             low=np.array([
                 -max_pos, -max_pos, -max_pos,
                 -max_vel, -max_vel, -max_vel,
                 -max_angle, -max_angle, -max_angle,
-                -max_ang_vel, -max_ang_vel, -max_ang_vel
+                -max_ang_vel, -max_ang_vel, -max_ang_vel,
+                1.0, 1.0, 0.1, 0.1,  # 控制器參數的最小值
+                0.0                  # 歸一化距離的最小值
             ]),
             high=np.array([
                 max_pos, max_pos, max_pos,
                 max_vel, max_vel, max_vel,
                 max_angle, max_angle, max_angle,
-                max_ang_vel, max_ang_vel, max_ang_vel
+                max_ang_vel, max_ang_vel, max_ang_vel,
+                max_lambda, max_eta, 1.0, 1.0,  # 控制器參數的最大值
+                10.0                             # 歸一化距離的最大值 (理論上最大為1，但設大一點更安全)
             ]),
             dtype=np.float32
         )
@@ -94,12 +102,21 @@ class QuadrotorEnv(gym.Env):
                 np.random.uniform(-3.0, 3.0),
                 np.random.uniform(0.0, 4.0)  # 確保高度為正
             ], dtype=np.float32)
+
+        self.initial_distance = np.linalg.norm(self.initial_position - self.target_position)
+
         print("----------")
         print(f"initial position:{self.initial_position}")
         print(f"target position:{self.target_position}")
         # 設置控制器目標
         self.controller.set_target_position(self.target_position)
-        
+
+        self.controller_params = np.array([
+            self.controller.lambda_att,
+            self.controller.eta_att,
+            self.controller.lambda_pos,
+            self.controller.eta_pos
+        ], dtype=np.float32)
         # 返回初始觀測值
         return self._get_obs()
     
@@ -119,7 +136,8 @@ class QuadrotorEnv(gym.Env):
         self.controller.eta_att = action[1]
         self.controller.lambda_pos = action[2]
         self.controller.eta_pos = action[3]
-        
+
+        self.controller_params = np.array([action[0], action[1], action[2], action[3]], dtype=np.float32)
         # 使用控制器計算控制輸入
         control_input = self.controller.update(self.dt)
         
@@ -152,7 +170,18 @@ class QuadrotorEnv(gym.Env):
     
     def _get_obs(self):
         """獲取當前觀測值（狀態）"""
-        return self.plant.get_state().astype(np.float32)
+        state = self.plant.get_state().astype(np.float32)
+        position = state[:3]
+        distance = np.linalg.norm(position - self.target_position)
+        normalized_distance = distance / self.initial_distance
+
+        self.controller_params = np.array([
+            self.controller.lambda_att,
+            self.controller.eta_att,
+            self.controller.lambda_pos,
+            self.controller.eta_pos
+        ], dtype=np.float32)
+        return np.concatenate([state, self.controller_params, np.array([normalized_distance])])
     
     def _compute_reward(self, state, action):
         """計算當前狀態和動作的獎勵值"""
@@ -181,18 +210,22 @@ class QuadrotorEnv(gym.Env):
         #     reward += 0.1  # 正獎勵
         
         # 姿態角偏差懲罰
-        # orientation_penalty = np.sum(np.square(angles[:2])) * 0.05
-        
+        # orientation_penalty = np.tanh(np.sum(np.square(angles[:2]))) * 0.05
+        # reward -= orientation_penalty 
+
         # # 速度懲罰（希望平穩運動）
-        # velocity_penalty = np.sum(np.square(velocity)) * 0.01
+        velocity_penalty = np.tanh(np.sum(np.square(velocity))) * 0.01
+        reward -= velocity_penalty
         
         # # 角速度懲罰（希望穩定姿態）
-        # ang_vel_penalty = np.sum(np.square(ang_vel)) * 0.01
-        
+        # ang_vel_penalty = np.tanh(np.sum(np.square(ang_vel))) * 0.005
+        # reward -= ang_vel_penalty
+
         # 控制參數變化太大的懲罰（鼓勵平穩變化）
         # param_change_penalty = 0.0
         # if hasattr(self, 'prev_action'):
-        #     param_change_penalty = np.sum(np.square(action - self.prev_action)) * 0.005
+        #     param_change_penalty = np.tanh(np.sum(np.square(action - self.prev_action))) * 0.05
+        #     reward -= param_change_penalty
         # self.prev_action = action.copy()
         
         # 扣除懲罰
@@ -200,19 +233,13 @@ class QuadrotorEnv(gym.Env):
         
         # 達到目標的大獎勵
         if distance < 0.2 and not self.reached_target:
-            reward += 2.0
-            print("\t\treach!")
+            reward += 3.0
+            print("\t\treach!")         
             self.reached_target = True
         elif distance < 0.2 and self.reached_target:
             self.step_sucess += 1
-            # reward += 0.1
-        # # 飛出範圍的懲罰
-        # if np.any(np.abs(position) > 15.0):
-        #     reward -= 0.1
-        # # 墜毀的大懲罰
-        # if position[2] < 0.0:
-        #     reward -= 0.1
-            
+            reward += 0.1
+
         return np.clip(reward, -2.0, 2.0)
     
     def _is_done(self, state):
@@ -228,16 +255,6 @@ class QuadrotorEnv(gym.Env):
         if self.step_count >= self.max_steps:
             print("\t \033[34m dead :(\033[0m")
             return True
-        
-        # # 檢查四旋翼機是否飛出範圍
-        # if np.any(np.abs(position) > 15.0):
-        #     print("\t飛出範圍")
-        #     return True
-        
-        # # 檢查是否墜毀
-        # if position[2] < 0.0:
-        #     print("\t墜毀")
-        #     return True
         
         
         # 成功條件：達到目標並在那裡停留一段時間
