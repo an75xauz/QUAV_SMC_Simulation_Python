@@ -69,7 +69,7 @@ def main():
         help='初始姿態角 [roll pitch yaw] (預設: [0 0.2 0.1]rad)'
     )
     parser.add_argument(
-        '--model_dir', type=str, default='checkpoints_1',
+        '--model_dir', type=str, default='model_16dim',
         help='模型存放目錄 (預設: logs)'
     )
     parser.add_argument(
