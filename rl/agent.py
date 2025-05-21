@@ -153,9 +153,9 @@ class TD3Agent:
         self.critic_losses = []
         self.actor_losses = []
         self.q_values = []
-        self.action_values = []
         self.q1_values = []
         self.q2_values = []
+        self.clipped_action_values = []
 
     def select_action(self, state, noise=0.0):
         """Select an action given a state (with optional exploration noise).根據目前的狀態選擇動作，可以加入噪聲來探索"""
@@ -169,9 +169,6 @@ class TD3Agent:
         else:
             # 訓練時保持訓練模式
             action = self.actor(state_tensor).cpu().data.numpy().flatten()
-        # 追蹤動作值
-        if hasattr(self, 'action_values'):
-            self.action_values.append(action.copy())
             
         if noise != 0.0:
             action = action + np.random.normal(0, noise, size=action.shape)

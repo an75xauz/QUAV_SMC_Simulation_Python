@@ -34,12 +34,9 @@ def plot_training_metrics(agent, episode_rewards, avg_rewards, eval_rewards, eva
         
         # Actor losses (may be sparse due to delayed updates)
         if hasattr(agent, 'actor_losses') and len(agent.actor_losses) > 0:
-            # actor_iterations = list(range(agent.policy_delay, len(agent.critic_losses) + 1, agent.policy_delay))
-            policy_delay = int(agent.policy_delay.item()) if torch.is_tensor(agent.policy_delay) else agent.policy_delay
-            actor_iterations = list(range(policy_delay, len(agent.critic_losses) + 1, policy_delay))
-            if len(actor_iterations) > len(agent.actor_losses):
-                actor_iterations = actor_iterations[:len(agent.actor_losses)]
-            axs[0, 1].plot(actor_iterations, agent.actor_losses, 'r-', label='Actor Loss')
+            # 直接使用索引作為 x 軸而不是嘗試計算實際的迭代次數
+            actor_x = list(range(1, len(agent.actor_losses) + 1))
+            axs[0, 1].plot(actor_x, agent.actor_losses, 'r-', label='Actor Loss')
         
         axs[0, 1].set_xlabel('Training Iterations')
         axs[0, 1].set_ylabel('Loss Value')
@@ -74,9 +71,9 @@ def plot_training_metrics(agent, episode_rewards, avg_rewards, eval_rewards, eva
                      transform=axs[1, 0].transAxes)
     
     # 4. Action parameter values (bottom-right)
-    if hasattr(agent, 'action_values') and len(agent.action_values) > 0:
+    if hasattr(agent, 'clipped_action_values') and len(agent.clipped_action_values) > 0:
         # Convert action values to numpy array
-        action_array = np.array(agent.action_values)
+        action_array = np.array(agent.clipped_action_values)
         
         # Sample to reduce plot points if too many
         sample_rate = max(1, len(action_array) // 1000)
@@ -87,20 +84,21 @@ def plot_training_metrics(agent, episode_rewards, avg_rewards, eval_rewards, eva
         action_dim = sampled_actions.shape[1]
         
         # Plot a line for each SMC parameter
-        param_names = ['lambda_alt', 'eta_alt', 'lambda_att', 'eta_att', 'lambda_pos', 'eta_pos']
+        param_names = ['lambda_att', 'eta_att', 'lambda_pos', 'eta_pos']
         for i in range(action_dim):
             param_name = param_names[i] if i < len(param_names) else f'Param {i+1}'
             axs[1, 1].plot(sampled_indices, sampled_actions[:, i], label=param_name)
         
         axs[1, 1].set_xlabel('Steps')
         axs[1, 1].set_ylabel('Parameter Value')
-        axs[1, 1].set_title('SMC Controller Parameter Changes')
+        axs[1, 1].set_title('SMC Controller Parameters (Clipped)')
         axs[1, 1].legend()
         axs[1, 1].grid(True)
     else:
-        axs[1, 1].text(0.5, 0.5, 'Action parameter data not yet collected', 
-                     horizontalalignment='center', verticalalignment='center',
-                     transform=axs[1, 1].transAxes)
+    # Fall back to raw action values if clipped ones aren't available
+        axs[1, 1].text(0.5, 0.5, 'Clipped action parameter data not available', 
+                    horizontalalignment='center', verticalalignment='center',
+                    transform=axs[1, 1].transAxes)
     
     # Adjust subplots spacing
     plt.tight_layout(rect=[0, 0, 1, 0.96])
