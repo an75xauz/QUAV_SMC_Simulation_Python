@@ -98,8 +98,8 @@ class QuadrotorEnv(gym.Env):
         if self.random_target:
             # 範例：在3x3x3的空間內隨機生成目標
             self.target_position = np.array([
-                np.random.uniform(-3.0, 3.0),
-                np.random.uniform(-3.0, 3.0),
+                np.random.uniform(-6.0, 6.0),
+                np.random.uniform(-6.0, 6.0),
                 np.random.uniform(0.0, 4.0)  # 確保高度為正
             ], dtype=np.float32)
 
