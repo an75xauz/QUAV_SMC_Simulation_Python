@@ -35,8 +35,11 @@ def plot_training_metrics(agent, episode_rewards, avg_rewards, eval_rewards, eva
         # Actor losses (may be sparse due to delayed updates)
         if hasattr(agent, 'actor_losses') and len(agent.actor_losses) > 0:
             # 直接使用索引作為 x 軸而不是嘗試計算實際的迭代次數
-            actor_x = list(range(1, len(agent.actor_losses) + 1))
-            axs[0, 1].plot(actor_x, agent.actor_losses, 'r-', label='Actor Loss')
+            policy_delay = int(agent.policy_delay.item()) if torch.is_tensor(agent.policy_delay) else agent.policy_delay
+            actor_iterations = list(range(policy_delay, len(agent.critic_losses) + 1, policy_delay))
+            if len(actor_iterations) > len(agent.actor_losses):
+                actor_iterations = actor_iterations[:len(agent.actor_losses)]
+            axs[0, 1].plot(actor_iterations, agent.actor_losses, 'r-', label='Actor Loss')
         
         axs[0, 1].set_xlabel('Training Iterations')
         axs[0, 1].set_ylabel('Loss Value')
