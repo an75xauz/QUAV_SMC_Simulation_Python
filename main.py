@@ -22,7 +22,7 @@ def main():
         help='Initial Position [x y z] (Default: [0 0 0])'
     )
     parser.add_argument(
-        '--target', type=float, nargs=3, default=[1, 1, 2],
+        '--target', type=float, nargs=3, default=[2, 2, 2],
         help='Target Position [x y z] (Default: [1 1 2])'
     )
     parser.add_argument(
@@ -38,7 +38,7 @@ def main():
         help='Generate static plots only (no animation)'
     )
     parser.add_argument(
-        '--initial_attitude', type=float, nargs=3, default=[0, 0.2, 0.1],
+        '--initial_attitude', type=float, nargs=3, default=[0.1, 0, 0],
         help='Initial Attitude [roll pitch yaw] (Default: [0 0.1 0.1]rad)'
     )
     

@@ -48,7 +48,7 @@ def main():
         help='初始位置 [x y z] (預設: [0 0 0])'
     )
     parser.add_argument(
-        '--target', type=float, nargs=3, default=[1, 1, 2],
+        '--target', type=float, nargs=3, default=[2, 2, 2], 
         help='目標位置 [x y z] (預設: [1 1 2])'
     )
     parser.add_argument(
@@ -56,7 +56,7 @@ def main():
         help='模擬時間長度 (秒) (預設: 10.0)'
     )
     parser.add_argument(
-        '--dt', type=float, default=0.05,
+        '--dt', type=float, default=0.01,
         help='時間步長 (秒) (預設: 0.05)'
     )
     parser.add_argument(
@@ -64,7 +64,7 @@ def main():
         help='只產生靜態圖表 (不顯示動畫)'
     )
     parser.add_argument(
-        '--initial_attitude', type=float, nargs=3, default=[0, 0, 0],
+        '--initial_attitude', type=float, nargs=3, default=[0.1, 0.0, 0.0],
         help='初始姿態角 [roll pitch yaw] (預設: [0 0.2 0.1]rad)'
     )
     parser.add_argument(
@@ -72,7 +72,7 @@ def main():
         help='模型存放目錄 (預設: logs)'
     )
     parser.add_argument(
-        '--actor_file', type=str, default='best_actor.pth',
+        '--actor_file', type=str, default='actor_4100.pth',
         help='Actor 模型檔案名稱 (預設: best_actor.pth)'
     )
     
